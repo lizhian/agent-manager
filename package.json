@@ -1,6 +1,6 @@
 {
   "name": "agent-manager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Desktop manager for agent skills, MCP servers, agent profiles, and AGENTS.md files.",
   "type": "module",
   "scripts": {

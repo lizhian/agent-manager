@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, DocumentPreviewPosition, FontSize } from "./types";
+import type { AppSettings, DocumentPreviewPosition, FontSize, GaalInfo } from "./types";
 
 function inTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -42,5 +42,20 @@ export const settingsApi = {
       return Promise.resolve(["Arial", "Georgia", "Helvetica Neue", "Menlo", "Times New Roman"]);
     }
     return invoke<string[]>("get_system_fonts");
+  },
+  gaalInfo() {
+    if (!inTauriRuntime()) {
+      return Promise.resolve<GaalInfo>({
+        installed: false,
+        path: "~/.agent-manager/bin/gaal",
+        directory: "~/.agent-manager/bin",
+        version: "",
+      });
+    }
+    return invoke<GaalInfo>("get_gaal_info");
+  },
+  installGaal() {
+    if (!inTauriRuntime()) throw new Error("该操作需要在 Agent Manager 桌面应用中执行");
+    return invoke<GaalInfo>("install_gaal");
   },
 };

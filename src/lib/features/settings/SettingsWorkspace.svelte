@@ -1,10 +1,11 @@
 <script lang="ts">
   import {
-    AlertTriangle, CaseSensitive, Check, ChevronDown, LoaderCircle, Search, Type, X,
+    AlertTriangle, CaseSensitive, Check, ChevronDown, CircleCheck, Download,
+    LoaderCircle, Search, TerminalSquare, Type, X,
   } from "@lucide/svelte";
   import { onMount, tick } from "svelte";
   import { settingsApi } from "./api";
-  import type { FontSize } from "./types";
+  import type { FontSize, GaalInfo } from "./types";
 
   type Props = {
     fontSize: FontSize;
@@ -35,6 +36,9 @@
   let activeFontIndex = $state(0);
   let fontPicker: HTMLElement | null = $state(null);
   let fontInput: HTMLInputElement | null = $state(null);
+  let gaalInfo: GaalInfo | null = $state(null);
+  let gaalLoading = $state(true);
+  let gaalInstalling = $state(false);
 
   let fontOptions = $derived.by(() => {
     const options = [{ value: "", label: "跟随系统" }];
@@ -58,7 +62,33 @@
     if (!fontMenuOpen) fontQuery = fontFamily || "跟随系统";
   });
 
-  onMount(loadSystemFonts);
+  onMount(() => {
+    void loadSystemFonts();
+    void loadGaalInfo();
+  });
+
+  async function loadGaalInfo() {
+    gaalLoading = true;
+    try {
+      gaalInfo = await settingsApi.gaalInfo();
+    } catch (reason) {
+      error = reason instanceof Error ? reason.message : String(reason);
+    } finally {
+      gaalLoading = false;
+    }
+  }
+
+  async function installGaal() {
+    gaalInstalling = true;
+    error = "";
+    try {
+      gaalInfo = await settingsApi.installGaal();
+    } catch (reason) {
+      error = reason instanceof Error ? reason.message : String(reason);
+    } finally {
+      gaalInstalling = false;
+    }
+  }
 
   async function loadSystemFonts() {
     fontsLoading = true;
@@ -237,15 +267,49 @@
       </div>
     </div>
   </section>
+  <section class="settings-panel gaal-panel" aria-labelledby="gaal-title">
+    <header><h3 id="gaal-title">GAAL</h3></header>
+    <div class="setting-row gaal-row">
+      <div class="setting-icon"><TerminalSquare size={19} /></div>
+      <div class="setting-copy">
+        <strong>GAAL 命令行</strong>
+        {#if gaalLoading}
+          <span>正在读取安装状态...</span>
+        {:else if gaalInfo?.installed}
+          <span>{gaalInfo.version || "已安装"}</span>
+        {:else}
+          <span>MCP 配置分发依赖 GAAL，安装到 Agent Manager 私有目录。</span>
+        {/if}
+      </div>
+      {#if gaalLoading}
+        <LoaderCircle class="spin" size={18} />
+      {:else if gaalInfo?.installed}
+        <div class="gaal-status"><CircleCheck size={15} /><span>已安装</span></div>
+      {:else}
+        <button class="install-button" disabled={gaalInstalling} onclick={installGaal}>
+          {#if gaalInstalling}<LoaderCircle class="spin" size={15} />{:else}<Download size={15} />{/if}
+          {gaalInstalling ? "安装中" : "安装"}
+        </button>
+      {/if}
+    </div>
+    {#if gaalInfo}
+      <dl class="gaal-details">
+        <div><dt>目录</dt><dd>{gaalInfo.directory}</dd></div>
+        <div><dt>文件</dt><dd>{gaalInfo.path}</dd></div>
+        <div><dt>版本</dt><dd>{gaalInfo.version || "未安装"}</dd></div>
+      </dl>
+    {/if}
+  </section>
 </section>
 
 <style>
   h2,h3{margin:0}button{font:inherit;letter-spacing:0;cursor:pointer}button:disabled{cursor:not-allowed;opacity:.52}
   .settings-topbar{display:flex;min-height:35px;align-items:center;padding:0 1px 6px;border-bottom:1px solid var(--border);user-select:none}.settings-topbar h2{font-size:var(--font-page-title);pointer-events:none}
   .message{display:grid;flex:none;grid-template-columns:15px 1fr 22px;gap:5px;align-items:center;margin-top:6px;border:1px solid;border-radius:6px;padding:4px 7px;font-size:var(--font-control)}.message.error{border-color:#efcaca;color:#922d2d;background:#fff3f3}.message button{display:grid;width:22px;height:22px;place-items:center;border:0;color:inherit;background:transparent}
-  .settings-content{min-height:0;flex:1;padding-top:8px;overflow:auto}.settings-panel{position:relative;overflow:visible;border:1px solid var(--border);border-radius:6px;background:white}.settings-panel>header{padding:7px 10px;border-bottom:1px solid var(--border);border-radius:6px 6px 0 0;background:#fafbfc}.settings-panel h3{font-size:var(--font-panel-title)}.setting-row{display:grid;grid-template-columns:32px minmax(220px,1fr) auto;gap:8px;align-items:center;padding:10px}.setting-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:6px;color:#53606c;background:#eef1f4}.setting-copy{display:grid;gap:2px}.setting-copy strong{font-size:var(--font-body)}.setting-copy span{color:var(--muted);font-size:var(--font-aux)}
+  .settings-content{display:grid;min-height:0;flex:1;align-content:start;gap:8px;padding-top:8px;overflow:auto}.settings-panel{position:relative;overflow:visible;border:1px solid var(--border);border-radius:6px;background:white}.settings-panel>header{padding:7px 10px;border-bottom:1px solid var(--border);border-radius:6px 6px 0 0;background:#fafbfc}.settings-panel h3{font-size:var(--font-panel-title)}.setting-row{display:grid;grid-template-columns:32px minmax(220px,1fr) auto;gap:8px;align-items:center;padding:10px}.setting-icon{display:grid;width:30px;height:30px;place-items:center;border-radius:6px;color:#53606c;background:#eef1f4}.setting-copy{display:grid;gap:2px}.setting-copy strong{font-size:var(--font-body)}.setting-copy span{color:var(--muted);font-size:var(--font-aux)}
   .segmented{display:flex;overflow:hidden;border:1px solid #cbd2d9;border-radius:6px;background:#f5f7f9}.segmented button{display:inline-flex;min-width:60px;min-height:28px;align-items:center;justify-content:center;gap:4px;border:0;border-right:1px solid #d8dde2;padding:4px 8px;color:#4c5864;background:transparent;font-size:var(--font-control);font-weight:650}.segmented button:last-child{border-right:0}.segmented button:hover{background:white}.segmented button.active{color:#174a9e;background:#eaf1ff}.segmented button:focus-visible{position:relative;z-index:1;outline:2px solid #7ea4ee;outline-offset:-2px}
   .font-family-row{border-top:1px solid #e7eaed}.font-picker{position:relative;width:300px}.font-combobox{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:5px;align-items:center;height:32px;border:1px solid #cbd2d9;border-radius:6px;padding:0 5px 0 8px;color:#75808b;background:white}.font-combobox:focus-within,.font-combobox.open{border-color:#7ea4ee;box-shadow:0 0 0 2px rgba(37,99,235,.1)}.font-combobox input{min-width:0;height:28px;border:0;outline:0;background:transparent;color:#303942;font-size:var(--font-control)}.font-combobox>button{display:grid;width:24px;height:24px;place-items:center;border:0;border-radius:4px;color:#68737f;background:transparent}.font-combobox>button:hover{background:#eef1f4}.font-options{position:absolute;right:0;top:calc(100% + 4px);z-index:12;width:100%;max-height:280px;overflow:auto;border:1px solid #cbd2d9;border-radius:6px;padding:4px;background:white;box-shadow:0 12px 28px rgba(25,34,43,.16)}.font-options button{display:flex;width:100%;min-height:30px;align-items:center;justify-content:space-between;gap:8px;border:0;border-radius:4px;padding:5px 7px;color:#35414c;background:white;text-align:left;font-size:var(--font-control)}.font-options button:hover,.font-options button.active{background:#eef4ff}.font-options button.selected{color:#174a9e;font-weight:650}.font-options button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.font-empty{padding:16px 8px;color:var(--muted);font-size:var(--font-aux);text-align:center}
+  .gaal-row{border-bottom:1px solid #e7eaed}.gaal-status,.install-button{display:inline-flex;min-height:28px;align-items:center;gap:4px;border-radius:6px;padding:4px 8px;font-size:var(--font-control);font-weight:650}.gaal-status{color:#24643d;background:#effaf3}.install-button{border:1px solid #296bd6;color:white;background:#2563c7}.install-button:hover{background:#1f56ad}.gaal-details{display:grid;margin:0}.gaal-details>div{display:grid;grid-template-columns:70px minmax(0,1fr);border-top:1px solid #eef0f2;padding:6px 10px}.gaal-details>div:first-child{border-top:0}.gaal-details dt{color:var(--muted);font-size:var(--font-aux);font-weight:650}.gaal-details dd{margin:0;overflow-wrap:anywhere;color:#35414c;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--font-aux)}
   :global(.spin){animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
   @media(max-width:680px){.setting-row{grid-template-columns:32px 1fr}.segmented,.font-picker{grid-column:1/-1;width:100%}.segmented button{min-width:0;flex:1}}
   @media(prefers-reduced-motion:reduce){:global(.spin){animation:none}}

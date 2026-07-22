@@ -11,8 +11,10 @@
   import { onMount } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import VerticalResizeHandle from "$lib/components/VerticalResizeHandle.svelte";
+  import AgentsWorkspace from "$lib/features/agents/AgentsWorkspace.svelte";
   import { skillsApi } from "$lib/features/skills/api";
   import AgentsMdWorkspace from "$lib/features/agentsMd/AgentsMdWorkspace.svelte";
+  import McpWorkspace from "$lib/features/mcp/McpWorkspace.svelte";
   import SettingsWorkspace from "$lib/features/settings/SettingsWorkspace.svelte";
   import { settingsApi } from "$lib/features/settings/api";
   import type { DocumentPreviewPosition, FontSize } from "$lib/features/settings/types";
@@ -27,8 +29,8 @@
 
   const sections = [
     { id: "skills" as const, label: "Skills", icon: Blocks, available: true },
-    { id: "mcp" as const, label: "MCP", icon: Plug, available: false },
-    { id: "agents" as const, label: "Agents", icon: Bot, available: false },
+    { id: "mcp" as const, label: "MCP", icon: Plug, available: true },
+    { id: "agents" as const, label: "Agents", icon: Bot, available: true },
     { id: "agents-md" as const, label: "AGENTS.md", icon: FileCode2, available: true },
   ];
   const markdownPlugins = [gfmPlugin(), { rehypePlugin: rehypeSlug }];
@@ -627,6 +629,10 @@
           {/if}
         </section>
       </section>
+    {:else if activeSection === "mcp"}
+      <McpWorkspace />
+    {:else if activeSection === "agents"}
+      <AgentsWorkspace />
     {:else if activeSection === "agents-md"}
       <AgentsMdWorkspace />
     {:else if activeSection === "settings"}

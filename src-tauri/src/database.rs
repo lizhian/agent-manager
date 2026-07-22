@@ -1,5 +1,7 @@
 use crate::{
+    agents::AgentRecord,
     agents_md::AgentsMdFragment,
+    mcp::McpServer,
     skills::{Catalog, SkillRecord, SourceRecord},
 };
 use rusqlite::{params, Connection};
@@ -232,6 +234,172 @@ impl Database {
             .map_err(|error| format!("提交 AGENTS.md 片段事务失败：{error}"))
     }
 
+    pub fn load_mcp_servers(&self) -> Result<Vec<McpServer>, String> {
+        let connection = self.connect()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id, name, transport, command, args_json, env_json, url,
+                        headers_json, agents_json, enabled, created_at, updated_at
+                 FROM agent_mcp_servers ORDER BY name, id",
+            )
+            .map_err(|error| format!("准备读取 MCP 服务失败：{error}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                let args_json = row.get::<_, String>(4)?;
+                let env_json = row.get::<_, String>(5)?;
+                let headers_json = row.get::<_, String>(7)?;
+                let agents_json = row.get::<_, String>(8)?;
+                Ok(McpServer {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    transport: row.get(2)?,
+                    command: row.get(3)?,
+                    args: parse_json_column(&args_json, 4)?,
+                    env: parse_json_column(&env_json, 5)?,
+                    url: row.get(6)?,
+                    headers: parse_json_column(&headers_json, 7)?,
+                    agents: parse_json_column(&agents_json, 8)?,
+                    enabled: row.get::<_, i64>(9)? != 0,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
+                })
+            })
+            .map_err(|error| format!("读取 MCP 服务失败：{error}"))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("解析 MCP 服务失败：{error}"))
+    }
+
+    pub fn save_mcp_servers(&self, servers: &[McpServer]) -> Result<(), String> {
+        let mut connection = self.connect()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("开始保存 MCP 服务事务失败：{error}"))?;
+        transaction
+            .execute("DELETE FROM agent_mcp_servers", [])
+            .map_err(|error| format!("准备覆盖 MCP 服务失败：{error}"))?;
+        for server in servers {
+            transaction
+                .execute(
+                    "INSERT INTO agent_mcp_servers
+                       (id, name, transport, command, args_json, env_json, url,
+                        headers_json, agents_json, enabled, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                    params![
+                        server.id,
+                        server.name,
+                        server.transport,
+                        server.command,
+                        serde_json::to_string(&server.args)
+                            .map_err(|error| format!("序列化 MCP 参数失败：{error}"))?,
+                        serde_json::to_string(&server.env)
+                            .map_err(|error| format!("序列化 MCP 环境变量失败：{error}"))?,
+                        server.url,
+                        serde_json::to_string(&server.headers)
+                            .map_err(|error| format!("序列化 MCP 请求头失败：{error}"))?,
+                        serde_json::to_string(&server.agents)
+                            .map_err(|error| format!("序列化 MCP Agent 失败：{error}"))?,
+                        i64::from(server.enabled),
+                        server.created_at,
+                        server.updated_at,
+                    ],
+                )
+                .map_err(|error| format!("保存 MCP 服务 {} 失败：{error}", server.name))?;
+        }
+        transaction
+            .commit()
+            .map_err(|error| format!("提交 MCP 服务事务失败：{error}"))
+    }
+
+    pub fn load_agent_cache(&self) -> Result<Option<(Vec<AgentRecord>, String)>, String> {
+        let connection = self.connect()?;
+        let gaal_version = match connection.query_row(
+            "SELECT gaal_version FROM agent_cache_metadata WHERE id = 1",
+            [],
+            |row| row.get::<_, String>(0),
+        ) {
+            Ok(value) => value,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(error) => return Err(format!("读取 Agents 缓存元数据失败：{error}")),
+        };
+        let mut statement = connection
+            .prepare(
+                "SELECT name, installed, source, project_skills_dir, global_skills_dir,
+                        project_mcp_config_file, global_mcp_config_file,
+                        supports_generic_project, supports_generic_global
+                 FROM agent_cache ORDER BY installed DESC, name",
+            )
+            .map_err(|error| format!("准备读取 Agents 缓存失败：{error}"))?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(AgentRecord {
+                    name: row.get(0)?,
+                    installed: row.get::<_, i64>(1)? != 0,
+                    source: row.get(2)?,
+                    project_skills_dir: row.get(3)?,
+                    global_skills_dir: row.get(4)?,
+                    project_mcp_config_file: row.get(5)?,
+                    global_mcp_config_file: row.get(6)?,
+                    supports_generic_project: row.get::<_, i64>(7)? != 0,
+                    supports_generic_global: row.get::<_, i64>(8)? != 0,
+                })
+            })
+            .map_err(|error| format!("读取 Agents 缓存失败：{error}"))?;
+        let agents = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("解析 Agents 缓存失败：{error}"))?;
+        Ok(Some((agents, gaal_version)))
+    }
+
+    pub fn save_agent_cache(
+        &self,
+        agents: &[AgentRecord],
+        gaal_version: &str,
+        updated_at: &str,
+    ) -> Result<(), String> {
+        let mut connection = self.connect()?;
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("开始保存 Agents 缓存事务失败：{error}"))?;
+        transaction
+            .execute("DELETE FROM agent_cache", [])
+            .map_err(|error| format!("准备覆盖 Agents 缓存失败：{error}"))?;
+        for agent in agents {
+            transaction
+                .execute(
+                    "INSERT INTO agent_cache
+                       (name, installed, source, project_skills_dir, global_skills_dir,
+                        project_mcp_config_file, global_mcp_config_file,
+                        supports_generic_project, supports_generic_global)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![
+                        agent.name,
+                        i64::from(agent.installed),
+                        agent.source,
+                        agent.project_skills_dir,
+                        agent.global_skills_dir,
+                        agent.project_mcp_config_file,
+                        agent.global_mcp_config_file,
+                        i64::from(agent.supports_generic_project),
+                        i64::from(agent.supports_generic_global),
+                    ],
+                )
+                .map_err(|error| format!("保存 Agent {} 缓存失败：{error}", agent.name))?;
+        }
+        transaction
+            .execute(
+                "INSERT INTO agent_cache_metadata (id, gaal_version, updated_at)
+                 VALUES (1, ?1, ?2)
+                 ON CONFLICT(id) DO UPDATE SET
+                   gaal_version = excluded.gaal_version,
+                   updated_at = excluded.updated_at",
+                params![gaal_version, updated_at],
+            )
+            .map_err(|error| format!("保存 Agents 缓存元数据失败：{error}"))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("提交 Agents 缓存事务失败：{error}"))
+    }
+
     pub fn load_app_setting(&self, key: &str) -> Result<Option<String>, String> {
         let connection = self.connect()?;
         match connection.query_row(
@@ -314,10 +482,46 @@ impl Database {
                  );
                  CREATE INDEX IF NOT EXISTS idx_agents_md_fragments_sort_order
                    ON agents_md_fragments(sort_order, id);
+                 CREATE TABLE IF NOT EXISTS agent_mcp_servers (
+                   id INTEGER PRIMARY KEY,
+                   name TEXT NOT NULL UNIQUE,
+                   transport TEXT NOT NULL,
+                   command TEXT NOT NULL DEFAULT '',
+                   args_json TEXT NOT NULL DEFAULT '[]',
+                   env_json TEXT NOT NULL DEFAULT '{}',
+                   url TEXT NOT NULL DEFAULT '',
+                   headers_json TEXT NOT NULL DEFAULT '{}',
+                   agents_json TEXT NOT NULL DEFAULT '[]',
+                   enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+                   created_at TEXT NOT NULL,
+                   updated_at TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS agent_cache (
+                   name TEXT PRIMARY KEY,
+                   installed INTEGER NOT NULL CHECK (installed IN (0, 1)),
+                   source TEXT NOT NULL,
+                   project_skills_dir TEXT NOT NULL DEFAULT '',
+                   global_skills_dir TEXT NOT NULL DEFAULT '',
+                   project_mcp_config_file TEXT NOT NULL DEFAULT '',
+                   global_mcp_config_file TEXT NOT NULL DEFAULT '',
+                   supports_generic_project INTEGER NOT NULL DEFAULT 0
+                     CHECK (supports_generic_project IN (0, 1)),
+                   supports_generic_global INTEGER NOT NULL DEFAULT 0
+                     CHECK (supports_generic_global IN (0, 1))
+                 );
+                 CREATE TABLE IF NOT EXISTS agent_cache_metadata (
+                   id INTEGER PRIMARY KEY CHECK (id = 1),
+                   gaal_version TEXT NOT NULL DEFAULT '',
+                   updated_at TEXT NOT NULL
+                 );
                  INSERT OR IGNORE INTO schema_migrations(version, applied_at)
                    VALUES (1, strftime('%s', 'now'));
                  INSERT OR IGNORE INTO schema_migrations(version, applied_at)
-                   VALUES (2, strftime('%s', 'now'));",
+                   VALUES (2, strftime('%s', 'now'));
+                 INSERT OR IGNORE INTO schema_migrations(version, applied_at)
+                   VALUES (3, strftime('%s', 'now'));
+                 INSERT OR IGNORE INTO schema_migrations(version, applied_at)
+                   VALUES (4, strftime('%s', 'now'));",
             )
             .map_err(|error| format!("初始化 SQLite 数据库失败：{error}"))
     }
@@ -349,6 +553,19 @@ where
         .map_err(|error| format!("读取数据库清理结果失败：{error}"))
 }
 
+fn parse_json_column<T: serde::de::DeserializeOwned>(
+    value: &str,
+    column: usize,
+) -> rusqlite::Result<T> {
+    serde_json::from_str(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            column,
+            rusqlite::types::Type::Text,
+            Box::new(error),
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,6 +587,20 @@ mod tests {
                     updated_at: "200".into(),
                 }],
             }],
+        }
+    }
+
+    fn sample_agent(name: &str, installed: bool) -> AgentRecord {
+        AgentRecord {
+            name: name.into(),
+            installed,
+            source: "builtin".into(),
+            project_skills_dir: ".agents/skills".into(),
+            global_skills_dir: "~/.agents/skills".into(),
+            project_mcp_config_file: String::new(),
+            global_mcp_config_file: "~/.agent/mcp.json".into(),
+            supports_generic_project: true,
+            supports_generic_global: false,
         }
     }
 
@@ -418,6 +649,44 @@ mod tests {
         assert_eq!(source_id, updated_source_id);
         assert_eq!(skill_id, updated_skill_id);
         assert_eq!(description, "updated");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn saves_and_replaces_agent_cache_atomically() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("agent-manager-agent-cache-{nonce}"));
+        let database = Database::new(root.join("agent-manager.db")).expect("database");
+
+        assert!(database.load_agent_cache().expect("empty cache").is_none());
+        database
+            .save_agent_cache(
+                &[sample_agent("codex", true), sample_agent("cursor", false)],
+                "gaal v1",
+                "100",
+            )
+            .expect("save cache");
+        let (agents, version) = database
+            .load_agent_cache()
+            .expect("load cache")
+            .expect("cache exists");
+        assert_eq!(version, "gaal v1");
+        assert_eq!(agents.len(), 2);
+        assert_eq!(agents[0].name, "codex");
+
+        database
+            .save_agent_cache(&[sample_agent("cursor", false)], "gaal v2", "200")
+            .expect("replace cache");
+        let (agents, version) = database
+            .load_agent_cache()
+            .expect("reload cache")
+            .expect("cache exists");
+        assert_eq!(version, "gaal v2");
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].name, "cursor");
         let _ = fs::remove_dir_all(root);
     }
 }

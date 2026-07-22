@@ -1,5 +1,8 @@
+mod agents;
 mod agents_md;
 mod database;
+mod gaal;
+mod mcp;
 mod settings;
 mod skills;
 
@@ -13,6 +16,18 @@ pub fn run() {
             settings::set_font_size,
             settings::set_font_family,
             settings::set_document_preview_layout,
+            gaal::get_gaal_info,
+            gaal::install_gaal,
+            mcp::get_mcp_dashboard,
+            mcp::create_mcp_server,
+            mcp::update_mcp_server,
+            mcp::delete_mcp_server,
+            mcp::set_mcp_server_enabled,
+            mcp::set_mcp_default_agents,
+            mcp::sync_mcps,
+            mcp::inspect_mcp_tools,
+            mcp::call_mcp_tool,
+            agents::get_agents_dashboard,
             agents_md::get_agents_md_dashboard,
             agents_md::create_agents_md_fragment,
             agents_md::update_agents_md_fragment,

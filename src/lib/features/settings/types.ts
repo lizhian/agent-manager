@@ -7,3 +7,10 @@ export type AppSettings = {
   documentPreviewPosition: DocumentPreviewPosition;
   documentPreviewRatio: number;
 };
+
+export type GaalInfo = {
+  installed: boolean;
+  path: string;
+  directory: string;
+  version: string;
+};
