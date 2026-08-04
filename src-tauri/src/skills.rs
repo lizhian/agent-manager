@@ -1,10 +1,9 @@
-use crate::database::Database;
+use crate::{database::Database, process_env::user_command};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs, io,
     path::{Path, PathBuf},
-    process::Command,
     sync::{Mutex, MutexGuard, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -294,7 +293,7 @@ impl Store {
 
     fn prepare_source(&self, source: &str, temp_dir: &Path) -> Result<Vec<PreparedSkill>, String> {
         run_skills_command(temp_dir, &["add", source, "-y"])?;
-        let output = Command::new("npx")
+        let output = user_command("npx")
             .args(["--yes", "skills", "list", "--json"])
             .current_dir(temp_dir)
             .output()
@@ -665,7 +664,10 @@ pub fn get_skills_dashboard() -> Result<SkillsDashboard, String> {
         catalog,
         repository_path: store.repository_dir.to_string_lossy().into_owned(),
         global_target_path: store.global_target_dir.to_string_lossy().into_owned(),
-        npx_available: Command::new("npx").arg("--version").output().is_ok(),
+        npx_available: user_command("npx")
+            .arg("--version")
+            .output()
+            .is_ok_and(|output| output.status.success()),
         enabled_content_chars,
     })
 }
@@ -915,7 +917,7 @@ fn timestamp() -> String {
 }
 
 fn run_skills_command(workdir: &Path, args: &[&str]) -> Result<(), String> {
-    let output = Command::new("npx")
+    let output = user_command("npx")
         .arg("--yes")
         .arg("skills")
         .args(args)
@@ -1124,6 +1126,9 @@ fn create_symlink(target: &Path, link: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
     fn test_store(root: &Path) -> Store {
         Store::from_root(root.join(".agent-manager")).expect("create test store")
     }
@@ -1144,6 +1149,49 @@ mod tests {
         assert!(validate_source("mattpocock/skills").is_ok());
         assert!(validate_source("https://github.com/mattpocock/skills").is_err());
         assert_eq!(source_safe_name("mattpocock/skills"), "mattpocock_skills");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runs_npx_from_user_shell_path_when_inherited_path_is_restricted() {
+        let root = env::temp_dir().join(format!("agent-manager-npx-path-{}", timestamp()));
+        let empty_bin = root.join("empty-bin");
+        let user_bin = root.join("user-bin");
+        let shell = root.join("login-shell");
+        fs::create_dir_all(&empty_bin).expect("create restricted path");
+        fs::create_dir_all(&user_bin).expect("create user bin");
+        fs::write(
+            &shell,
+            format!(
+                "#!/bin/sh\nprintf '__AGENT_MANAGER_PATH_START__%s__AGENT_MANAGER_PATH_END__' '{}'\n",
+                user_bin.display()
+            ),
+        )
+        .expect("write fake shell");
+        fs::write(user_bin.join("npx"), "#!/usr/bin/env node\n").expect("write fake npx");
+        fs::write(user_bin.join("node"), "#!/bin/sh\nexit 0\n").expect("write fake node");
+        for path in [&shell, &user_bin.join("npx"), &user_bin.join("node")] {
+            let mut permissions = fs::metadata(path).expect("read permissions").permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(path, permissions).expect("make executable");
+        }
+
+        let old_path = env::var_os("PATH");
+        let old_shell = env::var_os("SHELL");
+        env::set_var("PATH", &empty_bin);
+        env::set_var("SHELL", &shell);
+        let result = run_skills_command(&root, &["add", "owner/repo", "-y"]);
+        match old_path {
+            Some(value) => env::set_var("PATH", value),
+            None => env::remove_var("PATH"),
+        }
+        match old_shell {
+            Some(value) => env::set_var("SHELL", value),
+            None => env::remove_var("SHELL"),
+        }
+        let _ = fs::remove_dir_all(root);
+
+        assert!(result.is_ok(), "{result:?}");
     }
 
     #[test]

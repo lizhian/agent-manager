@@ -3,6 +3,7 @@ mod agents_md;
 mod database;
 mod gaal;
 mod mcp;
+mod process_env;
 mod settings;
 mod skills;
 
