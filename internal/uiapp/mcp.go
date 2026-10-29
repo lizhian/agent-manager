@@ -12,6 +12,9 @@ import (
 type mcpPair struct{ Key, Value string }
 type MCPWorkspace struct {
 	service                              *mcp.Service
+	debugger                             *mcp.Debugger
+	debug                                mcpDebugState
+	mcpPage                              int
 	post                                 func(func())
 	snapshot                             mcp.Snapshot
 	status                               string
@@ -30,7 +33,7 @@ type MCPWorkspace struct {
 }
 
 func NewMCPWorkspace(service *mcp.Service) *MCPWorkspace {
-	return &MCPWorkspace{service: service, status: "loading", listWidth: 260}
+	return &MCPWorkspace{service: service, debugger: mcp.NewDebugger(service, mcp.DebugOptions{}), status: "loading", listWidth: 260}
 }
 func (w *MCPWorkspace) Load(post func(func())) {
 	w.post = post
@@ -68,6 +71,7 @@ func (w *MCPWorkspace) run(work func() (mcp.Snapshot, error), done func()) {
 	}()
 }
 func (w *MCPWorkspace) selectServer(server mcp.Server) {
+	w.resetDebug()
 	w.selected = server.ID
 	w.draft = server.Input
 	w.argsText = strings.Join(server.Args, "\n")
@@ -115,6 +119,7 @@ func (w *MCPWorkspace) View(c *ui.Context) {
 			ui.Text(c, "MCP 管理").FontSize(c.Theme().FontSize + 3).Bold()
 			ui.Text(c, fmt.Sprintf("%d 个服务", len(w.snapshot.Servers))).TextColor(t.TextMuted).Grow(1)
 			if ui.Button(c, "新增 MCP").Height(28).Bind(&w.newTrigger).Disabled(w.busy || w.status != "ready").Clicked() {
+				w.resetDebug()
 				w.selected = 0
 				w.mode = "new"
 				w.draft = mcp.Input{Transport: "stdio"}
@@ -171,6 +176,7 @@ func (w *MCPWorkspace) View(c *ui.Context) {
 								w.selectServer(w.snapshot.Servers[0])
 							}
 						}
+						w.resetDebug()
 						w.notice = "MCP 已删除"
 						w.newTrigger.Focus()
 					})
@@ -227,6 +233,11 @@ func (w *MCPWorkspace) list(c *ui.Context) {
 }
 func (w *MCPWorkspace) editor(c *ui.Context) {
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
+		ui.Segmented(c, &w.mcpPage, "服务配置", "工具调试").Height(28)
+		if w.mcpPage == 1 {
+			w.debugView(c)
+			return
+		}
 		if w.mode != "new" && w.mode != "edit" {
 			ui.Text(c, "选择一个 MCP，或新增服务配置。")
 			return
