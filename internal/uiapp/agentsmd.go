@@ -79,6 +79,7 @@ func (w *AgentsWorkspace) save() {
 		return w.service.Update(id, title, content)
 	}
 	w.run(work, func() {
+		sameContext := w.selected == id && w.draftMode == mode
 		if mode == "new" && w.draftMode == "new" && len(w.snapshot.Fragments) > 0 {
 			w.selectFragment(w.snapshot.Fragments[len(w.snapshot.Fragments)-1])
 		} else if w.selected == id && w.draftMode == mode {
@@ -88,7 +89,9 @@ func (w *AgentsWorkspace) save() {
 				}
 			}
 		}
-		w.saveTrigger.Focus()
+		if sameContext {
+			w.saveTrigger.Focus()
+		}
 	})
 }
 func (w *AgentsWorkspace) View(c *ui.Context) {
@@ -152,7 +155,14 @@ func (w *AgentsWorkspace) View(c *ui.Context) {
 				}
 				if ui.PrimaryButton(c, label).Height(28).Disabled(w.busy).Clicked() {
 					id := w.selected
-					w.run(func() (agentsmd.Snapshot, error) { return w.service.Delete(id) }, func() { w.deleteOpen = false; w.selected = 0; w.draftMode = "none"; w.newTrigger.Focus() })
+					w.run(func() (agentsmd.Snapshot, error) { return w.service.Delete(id) }, func() {
+						w.deleteOpen = false
+						if w.selected == id && w.draftMode == "edit" {
+							w.selected = 0
+							w.draftMode = "none"
+							w.newTrigger.Focus()
+						}
+					})
 				}
 			})
 		})
