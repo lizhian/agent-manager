@@ -13,8 +13,9 @@ import (
 )
 
 type Progress struct {
-	Source, Stage, Message string
-	Percent                int
+	Source, Stage, Message         string
+	Percent                        int
+	CompletedSources, TotalSources int
 }
 type SyncResult struct {
 	Snapshot                     Snapshot
@@ -26,16 +27,19 @@ type preparedSkill struct{ Name, Path string }
 
 var sourcePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
 
-func (s *Service) SyncSource(ctx context.Context, source string, progress func(Progress)) (result SyncResult, err error) {
+func (s *Service) SyncSource(ctx context.Context, source string, progress func(Progress)) (SyncResult, error) {
+	if !s.writeMu.TryLock() {
+		return SyncResult{}, fmt.Errorf("同步来源 %s 失败：另一个 Skills 写入任务正在运行", source)
+	}
+	defer s.writeMu.Unlock()
+	return s.syncSource(ctx, source, progress)
+}
+func (s *Service) syncSource(ctx context.Context, source string, progress func(Progress)) (result SyncResult, err error) {
 	source = strings.TrimSpace(source)
 	parts := strings.Split(source, "/")
 	if !sourcePattern.MatchString(source) || parts[0] == "." || parts[0] == ".." || parts[1] == "." || parts[1] == ".." {
 		return result, fmt.Errorf("来源格式无效，请输入 owner/repo")
 	}
-	if !s.writeMu.TryLock() {
-		return result, fmt.Errorf("同步来源 %s 失败：另一个 Skills 写入任务正在运行", source)
-	}
-	defer s.writeMu.Unlock()
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("同步来源 %s 失败：%w", source, err)
@@ -43,7 +47,7 @@ func (s *Service) SyncSource(ctx context.Context, source string, progress func(P
 	}()
 	send := func(stage, message string, percent int) {
 		if progress != nil {
-			progress(Progress{source, stage, message, percent})
+			progress(Progress{Source: source, Stage: stage, Message: message, Percent: percent, TotalSources: 1})
 		}
 	}
 	send("prepare", "正在准备临时目录", 10)
