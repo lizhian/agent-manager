@@ -51,6 +51,7 @@
 
 ## Agent skills
 
-创建、读取、更新 spec 或任务时，使用 GitHub Issues `lizhian/agent-manager`，先读取 `docs/agents/issue-tracker.md`。
-分类 issue 或设置工作状态标签时，读取 `docs/agents/triage-labels.md`。
-探索、设计、实现和评审前，按 `docs/agents/domain.md` 读取术语与相关 ADR。
+- Spec 与任务使用 GitHub Issues `lizhian/agent-manager`，通过 `gh` 操作；写操作显式指定 `--repo lizhian/agent-manager`。实现前读取相关 issue 及阻塞关系，完成后先发表解决说明，再关闭对应任务。
+- Issue 标签角色为 `needs-triage`（待分类）、`needs-info`（待补充）、`ready-for-agent`（可实现）、`ready-for-human`（需人工）、`wontfix`（不处理）。已明确的 spec/任务使用 `ready-for-agent`。
+- 探索、设计、实现和评审前读取已有 `GLOSSARY.md` 与相关 `docs/adr/`；术语表不存在时继续工作，不创建空文档。
+- 若本地存在 `docs/agents/issue-tracker.md`、`triage-labels.md` 或 `domain.md`，分别在操作 issue、分类标签或开展领域工作时读取其补充约定；这些本地文件不是干净检出的必需依赖。
