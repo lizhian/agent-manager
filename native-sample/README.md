@@ -1,6 +1,6 @@
 # AGENTS.md 原生验证样本（#2）
 
-仅验证 MyGo 原生绘制路径。此目录独立于现有 Tauri 应用，不迁移业务、不访问真实数据库、受管文件或用户文档。40 个片段均在内存；关闭或重置后丢弃。Markdown 外部链接禁止打开，图片不加载。
+仅验证 MyGo 原生绘制路径。此目录是独立历史样本；正式 Go 应用位于 `cmd/agent-manager`，本目录，不迁移业务、不访问真实数据库、受管文件或用户文档。40 个片段均在内存；关闭或重置后丢弃。Markdown 外部链接禁止打开，图片不加载。
 
 版本锁定：Go 1.27.3、MyGo v0.7.3（go.mod / go.sum）。需要各平台 MyGo 原生构建所需的系统开发工具；macOS 使用 Xcode Command Line Tools。无需 Node、Rust 或 WebView。
 

@@ -8,6 +8,7 @@ import (
 )
 
 type AgentsWorkspace struct {
+	viewportWidth             float32
 	service                   *agentsmd.Service
 	post                      func(func())
 	snapshot                  agentsmd.Snapshot
@@ -97,6 +98,9 @@ func (w *AgentsWorkspace) save() {
 func (w *AgentsWorkspace) View(c *ui.Context) {
 	t := c.Theme()
 	width, _ := c.Size()
+	if w.viewportWidth > 0 {
+		width = w.viewportWidth
+	}
 	maxList := min(float32(360), width-480)
 	w.listWidth = max(float32(240), min(w.listWidth, maxList))
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
@@ -183,6 +187,9 @@ func (w *AgentsWorkspace) editor(c *ui.Context) {
 			}
 		})
 		width, height := c.Size()
+		if w.viewportWidth > 0 {
+			width = w.viewportWidth
+		}
 		room := width - w.listWidth - 26
 		minimum := float32(220)
 		if w.bottom {

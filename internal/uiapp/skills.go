@@ -12,6 +12,7 @@ import (
 )
 
 type SkillsWorkspace struct {
+	viewportWidth                                      float32
 	deleteSourceOpen                                   bool
 	deleteImpact                                       *skills.RemoveImpact
 	deleteSourceTrigger                                *ui.Handle
@@ -154,10 +155,13 @@ func (w *SkillsWorkspace) open(work func() error) {
 }
 func (w *SkillsWorkspace) View(c *ui.Context) {
 	width, _ := c.Size()
+	if w.viewportWidth > 0 {
+		width = w.viewportWidth
+	}
 	maxList := max(float32(250), min(float32(420), width-400))
 	w.listWidth = max(float32(250), min(w.listWidth, maxList))
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
-		ui.Row(c).Gap(6).Children(func() {
+		ui.Row(c).Gap(6).Wrap().Children(func() {
 			ui.Text(c, "技能仓库").FontSize(c.Theme().FontSize + 3).Bold()
 			count, enabled := 0, 0
 			for _, source := range w.snapshot.Sources {

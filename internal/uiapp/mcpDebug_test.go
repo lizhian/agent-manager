@@ -19,7 +19,9 @@ func TestMCPUIDebugHelper(t *testing.T) {
 	server := sdk.NewServer(&sdk.Implementation{Name: "ui-fixture", Version: "1"}, nil)
 	sdk.AddTool(server, &sdk.Tool{Name: "echo", Description: "回声说明"}, func(ctx context.Context, req *sdk.CallToolRequest, in struct {
 		Message string `json:"message"`
-	}) (*sdk.CallToolResult, any, error) { return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: in.Message}}}, nil, nil })
+	}) (*sdk.CallToolResult, any, error) {
+		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: in.Message}}}, nil, nil
+	})
 	if err := server.Run(context.Background(), &sdk.StdioTransport{}); err != nil {
 		os.Exit(1)
 	}

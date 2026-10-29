@@ -11,6 +11,7 @@ import (
 
 type mcpPair struct{ Key, Value string }
 type MCPWorkspace struct {
+	viewportWidth                        float32
 	service                              *mcp.Service
 	debugger                             *mcp.Debugger
 	debug                                mcpDebugState
@@ -112,6 +113,9 @@ func (w *MCPWorkspace) save() {
 func (w *MCPWorkspace) View(c *ui.Context) {
 	t := c.Theme()
 	width, _ := c.Size()
+	if w.viewportWidth > 0 {
+		width = w.viewportWidth
+	}
 	maxList := max(float32(240), min(float32(360), width-480))
 	w.listWidth = max(float32(240), min(w.listWidth, maxList))
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {

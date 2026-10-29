@@ -44,7 +44,7 @@ func (a *App) View(c *ui.Context) {
 	theme.Spacing = 4
 	theme.Radius = 6
 	c.SetTheme(&theme)
-	ui.Column(c).Fill().Children(func() {
+	ui.Row(c).Fill().Children(func() {
 		pages := []string{}
 		if a.Skills != nil {
 			pages = append(pages, "Skills")
@@ -61,9 +61,9 @@ func (a *App) View(c *ui.Context) {
 			page = pages[0]
 		}
 		if len(pages) > 1 {
-			ui.Row(c).Padding(8).Gap(4).Children(func() {
+			ui.Column(c).Width(104).HeightPercent(100).Padding(6).Gap(4).Background(theme.Surface).Children(func() {
 				for _, name := range pages {
-					b := ui.Button(c, name).Height(28)
+					b := ui.Button(c, name).Height(28).WidthPercent(100)
 					if name == page {
 						b.Border(1, theme.Accent)
 					}
@@ -74,25 +74,39 @@ func (a *App) View(c *ui.Context) {
 				}
 			})
 		}
-		if a.Settings != nil && a.Settings.err != "" && page != "设置" {
-			ui.Row(c).PaddingX(8).Gap(4).Children(func() {
-				ui.Text(c, a.Settings.err).TextColor(theme.Danger).Grow(1)
-				if ui.Button(c, "重试保存设置").Height(28).Disabled(a.Settings.busy).Clicked() {
-					a.Settings.save(a.Settings.draft)
+		width, _ := c.Size()
+		available := width
+		if len(pages) > 1 {
+			available -= 104
+		}
+		a.Agents.viewportWidth = available
+		if a.Skills != nil {
+			a.Skills.viewportWidth = available
+		}
+		if a.MCP != nil {
+			a.MCP.viewportWidth = available
+		}
+		ui.Column(c).Grow(1).MinWidth(0).HeightPercent(100).Children(func() {
+			if a.Settings != nil && a.Settings.err != "" && page != "设置" {
+				ui.Row(c).PaddingX(8).Gap(4).Children(func() {
+					ui.Text(c, a.Settings.err).TextColor(theme.Danger).Grow(1)
+					if ui.Button(c, "重试保存设置").Height(28).Disabled(a.Settings.busy).Clicked() {
+						a.Settings.save(a.Settings.draft)
+					}
+				})
+			}
+			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+				switch page {
+				case "Skills":
+					a.Skills.View(c)
+				case "MCP":
+					a.MCP.View(c)
+				case "设置":
+					a.Settings.View(c)
+				default:
+					a.Agents.View(c)
 				}
 			})
-		}
-		ui.Column(c).Grow(1).MinHeight(0).Children(func() {
-			switch page {
-			case "Skills":
-				a.Skills.View(c)
-			case "MCP":
-				a.MCP.View(c)
-			case "设置":
-				a.Settings.View(c)
-			default:
-				a.Agents.View(c)
-			}
 		})
 	})
 }

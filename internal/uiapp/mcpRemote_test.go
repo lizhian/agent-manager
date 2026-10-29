@@ -18,7 +18,9 @@ func TestRemoteUITransportSwitchRejectsOldToolsAndCallsSSE(t *testing.T) {
 		server := sdk.NewServer(&sdk.Implementation{Name: kind, Version: "1"}, nil)
 		sdk.AddTool(server, &sdk.Tool{Name: "echo-" + kind, Description: kind + " 工具说明"}, func(ctx context.Context, req *sdk.CallToolRequest, input struct {
 			Message string `json:"message"`
-		}) (*sdk.CallToolResult, any, error) { return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: kind + input.Message}}}, nil, nil })
+		}) (*sdk.CallToolResult, any, error) {
+			return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: kind + input.Message}}}, nil, nil
+		})
 		return server
 	}
 	mux := http.NewServeMux()
