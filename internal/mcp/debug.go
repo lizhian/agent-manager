@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lizhian/agent-manager/internal/processenv"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"regexp"
@@ -122,6 +124,14 @@ func debugError(action, name string, ctx context.Context, err error) error {
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return fmt.Errorf("MCP %s %s已取消", name, action)
 	}
+	var config *remoteConfigError
+	if errors.As(err, &config) {
+		return fmt.Errorf("MCP %s %s失败：%s", name, action, config.message)
+	}
+	var status *remoteStatusError
+	if errors.As(err, &status) {
+		return fmt.Errorf("MCP %s %s失败：HTTP %d，请检查 URL、凭据和服务状态", name, action, status.code)
+	}
 	var pathError *exec.Error
 	if errors.As(err, &pathError) {
 		return fmt.Errorf("MCP %s %s失败：找不到可执行命令，请检查安装与 PATH", name, action)
@@ -130,8 +140,11 @@ func debugError(action, name string, ctx context.Context, err error) error {
 	return fmt.Errorf("MCP %s %s失败：无法完成协议交互，请检查命令、连接参数和服务状态", name, action)
 }
 func (d *Debugger) connect(ctx context.Context, server Server) (*sdk.ClientSession, func(), error) {
+	if server.Transport == "http" || server.Transport == "sse" {
+		return d.connectRemote(ctx, server)
+	}
 	if server.Transport != "stdio" {
-		return nil, nil, fmt.Errorf("此调试入口暂不支持 %s", server.Transport)
+		return nil, nil, fmt.Errorf("不支持的 MCP 传输 %s", server.Transport)
 	}
 	originalEnv := environmentMap(d.options.Environment())
 	env := make(map[string]string, len(originalEnv))
@@ -155,7 +168,7 @@ func (d *Debugger) connect(ctx context.Context, server Server) (*sdk.ClientSessi
 	if err != nil {
 		return nil, nil, err
 	}
-	session, err := sdk.NewClient(&sdk.Implementation{Name: "agent-manager", Version: "0.2.1"}, nil).Connect(ctx, &sdk.CommandTransport{Command: command, TerminateDuration: 100 * time.Millisecond}, &sdk.ClientSessionOptions{ProtocolVersion: "2025-06-18"})
+	session, err := newProtocolClient().Connect(ctx, &sdk.CommandTransport{Command: command, TerminateDuration: 100 * time.Millisecond}, &sdk.ClientSessionOptions{ProtocolVersion: "2025-06-18"})
 	if err != nil {
 		release()
 		return nil, nil, err
@@ -181,4 +194,9 @@ func environmentMap(values []string) map[string]string {
 		}
 	}
 	return env
+}
+
+// SDK diagnostics may contain remote payloads; expose only sanitized application errors.
+func newProtocolClient() *sdk.Client {
+	return sdk.NewClient(&sdk.Implementation{Name: "agent-manager", Version: "0.2.1"}, &sdk.ClientOptions{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 }
