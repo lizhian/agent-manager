@@ -32,12 +32,14 @@ type Snapshot struct {
 type Options struct {
 	Now         func() string
 	WriteAtomic func(string, []byte) error
+	OpenFolder  func(string) error
 }
 type Service struct {
-	store *storage.Store
-	now   func() string
-	write func(string, []byte) error
-	mu    sync.Mutex
+	store      *storage.Store
+	now        func() string
+	write      func(string, []byte) error
+	openFolder func(string) error
+	mu         sync.Mutex
 }
 
 func New(store *storage.Store, options Options) *Service {
@@ -47,7 +49,10 @@ func New(store *storage.Store, options Options) *Service {
 	if options.WriteAtomic == nil {
 		options.WriteAtomic = AtomicWrite
 	}
-	return &Service{store: store, now: options.Now, write: options.WriteAtomic}
+	if options.OpenFolder == nil {
+		options.OpenFolder = openFolder
+	}
+	return &Service{store: store, now: options.Now, write: options.WriteAtomic, openFolder: options.OpenFolder}
 }
 func (s *Service) Snapshot() (Snapshot, error) { return s.read(s.store.DB) }
 

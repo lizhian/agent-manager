@@ -7,9 +7,10 @@ import (
 )
 
 type App struct {
-	Agents  *AgentsWorkspace
-	Skills  *SkillsWorkspace
-	section string
+	Agents *AgentsWorkspace
+	Skills *SkillsWorkspace
+	MCP    *MCPWorkspace
+	page   string
 }
 
 func NewApp(service *agentsmd.Service) *App { return &App{Agents: NewAgentsWorkspace(service)} }
@@ -20,6 +21,9 @@ func (a *App) Start(post func(func())) {
 	if a.Skills != nil {
 		a.Skills.Load(post)
 	}
+	if a.MCP != nil {
+		a.MCP.Load(post)
+	}
 }
 func (a *App) View(c *ui.Context) {
 	theme := *c.Theme()
@@ -27,21 +31,40 @@ func (a *App) View(c *ui.Context) {
 	theme.Spacing = 4
 	theme.Radius = 6
 	c.SetTheme(&theme)
-	ui.Column(c).Fill().Gap(4).Children(func() {
+	ui.Column(c).Fill().Children(func() {
+		pages := []string{}
 		if a.Skills != nil {
-			ui.Row(c).Gap(4).Padding(8).Children(func() {
-				if ui.Button(c, "Skills").Height(28).Clicked() {
-					a.section = "skills"
-				}
-				if ui.Button(c, "AGENTS.md").Height(28).Clicked() {
-					a.section = "agents"
+			pages = append(pages, "Skills")
+		}
+		if a.MCP != nil {
+			pages = append(pages, "MCP")
+		}
+		pages = append(pages, "AGENTS.md")
+		page := a.page
+		if page == "" {
+			page = pages[0]
+		}
+		if len(pages) > 1 {
+			ui.Row(c).Padding(8).Gap(4).Children(func() {
+				for _, name := range pages {
+					b := ui.Button(c, name).Height(28)
+					if name == page {
+						b.Border(1, theme.Accent)
+					}
+					if b.Clicked() {
+						a.page = name
+						page = name
+					}
 				}
 			})
 		}
 		ui.Column(c).Grow(1).MinHeight(0).Children(func() {
-			if a.Skills != nil && a.section != "agents" {
+			switch page {
+			case "Skills":
 				a.Skills.View(c)
-			} else {
+			case "MCP":
+				a.MCP.View(c)
+			default:
 				a.Agents.View(c)
 			}
 		})
