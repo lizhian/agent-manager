@@ -55,14 +55,14 @@ func TestFormalSidebarAndToolbarFitAllSizes(t *testing.T) {
 						t.Fatal("missing navigation", label)
 					}
 
-					if r.X < 6 || r.X+r.W > 104 || r.Y <= previousY {
+					if r.X < 6 || r.X+r.W > 128 || r.Y <= previousY {
 						t.Fatal("navigation must remain a vertical sidebar", label, r)
 					}
 					previousY = r.Y
 				}
 				for _, label := range []string{"安装来源", "全部更新", "技能文件夹", "重新加载"} {
 					r, ok := tt.Find(label)
-					if !ok || r.X < 100 || r.X+r.W > float32(width) {
+					if !ok || r.X < 128 || r.X+r.W > float32(width) {
 						t.Fatal("toolbar leaves workspace", label, r)
 					}
 				}

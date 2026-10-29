@@ -12,3 +12,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /dist
 /agent-manager
+
+# Preserve old local Rust caches after the source migration.
+target/

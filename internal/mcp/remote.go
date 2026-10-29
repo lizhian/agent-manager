@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,9 @@ type requestTransport struct {
 	ctx     context.Context
 	headers http.Header
 	origin  *url.URL
+	// The SDK may reduce transport errors to a JSON-RPC code; retain their typed category.
+	failureMu sync.Mutex
+	failure   error
 }
 
 func (t *requestTransport) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -48,8 +52,14 @@ func (t *requestTransport) RoundTrip(request *http.Request) (*http.Response, err
 	if err != nil {
 		stop()
 		cancel()
+		t.failureMu.Lock()
+		t.failure = err
+		t.failureMu.Unlock()
 		return nil, err
 	}
+	t.failureMu.Lock()
+	t.failure = nil
+	t.failureMu.Unlock()
 	if response.StatusCode < 200 || response.StatusCode >= 400 {
 		_ = response.Body.Close()
 		stop()
@@ -87,7 +97,8 @@ func (d *Debugger) connectRemote(ctx context.Context, server Server) (*sdk.Clien
 	}
 	base := template.Clone()
 	base.IdleConnTimeout = time.Second
-	client := &http.Client{Transport: &requestTransport{base: base, ctx: ctx, headers: headers, origin: endpoint}, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	requests := &requestTransport{base: base, ctx: ctx, headers: headers, origin: endpoint}
+	client := &http.Client{Transport: requests, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		// Configured credentials must not follow redirects to another origin.
 		if req.URL.Scheme != endpoint.Scheme || req.URL.Host != endpoint.Host {
 			return http.ErrUseLastResponse
@@ -106,7 +117,10 @@ func (d *Debugger) connectRemote(ctx context.Context, server Server) (*sdk.Clien
 	session, err := newProtocolClient().Connect(ctx, transport, &sdk.ClientSessionOptions{ProtocolVersion: "2025-06-18"})
 	if err != nil {
 		base.CloseIdleConnections()
-		return nil, nil, err
+		requests.failureMu.Lock()
+		failure := requests.failure
+		requests.failureMu.Unlock()
+		return nil, nil, errors.Join(err, failure)
 	}
 	return session, func() { _ = session.Close(); base.CloseIdleConnections() }, nil
 }

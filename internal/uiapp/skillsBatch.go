@@ -100,7 +100,7 @@ func (w *SkillsWorkspace) sourceDeleteDialog(c *ui.Context) {
 				impact := *w.deleteImpact
 				ui.Text(c, impact.Source)
 				ui.Text(c, fmt.Sprintf("将删除 %d 个 Skills，移除 %d 个全局启用。", impact.InstalledSkills, impact.GlobalEnabledSkills))
-				ui.Text(c, "本地镜像与来源记录将被删除，此操作无法撤销。").FontSize(13)
+				ui.Text(c, "本地镜像与来源记录将被删除，此操作无法撤销。").FontSize(c.Theme().FontSize)
 			}
 			if w.err != "" {
 				ui.Text(c, w.err).TextColor(c.Theme().Danger)

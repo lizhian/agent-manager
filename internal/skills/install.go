@@ -76,9 +76,7 @@ func (s *Service) syncSource(ctx context.Context, source string, progress func(P
 	if err = json.Unmarshal(data[start:], &listed); err != nil {
 		return result, fmt.Errorf("解析 npx skills 输出失败：%w", err)
 	}
-	if len(listed) == 0 {
-		return result, fmt.Errorf("没有可安装的 Skill")
-	}
+
 	sort.Slice(listed, func(i, j int) bool { return listed[i].Name < listed[j].Name })
 	send("parse", "正在验证 Skill 路径和元信息", 48)
 	seen := map[string]bool{}
@@ -131,6 +129,9 @@ func (s *Service) syncSource(ctx context.Context, source string, progress func(P
 			}
 			previous = &v
 		}
+	}
+	if len(listed) == 0 && previous == nil {
+		return result, fmt.Errorf("没有可安装的 Skill")
 	}
 	send("catalog", "正在保存 catalog", 78)
 	return s.commitSource(source, safe, stage, listed, previous, send)

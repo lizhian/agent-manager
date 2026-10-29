@@ -61,7 +61,7 @@ func (a *App) View(c *ui.Context) {
 			page = pages[0]
 		}
 		if len(pages) > 1 {
-			ui.Column(c).Width(104).HeightPercent(100).Padding(6).Gap(4).Background(theme.Surface).Children(func() {
+			ui.Column(c).Width(128).HeightPercent(100).Padding(6).Gap(4).Background(theme.Surface).Children(func() {
 				for _, name := range pages {
 					b := ui.Button(c, name).Height(28).WidthPercent(100)
 					if name == page {
@@ -77,7 +77,7 @@ func (a *App) View(c *ui.Context) {
 		width, _ := c.Size()
 		available := width
 		if len(pages) > 1 {
-			available -= 104
+			available -= 128
 		}
 		a.Agents.viewportWidth = available
 		if a.Skills != nil {
@@ -90,8 +90,16 @@ func (a *App) View(c *ui.Context) {
 			if a.Settings != nil && a.Settings.err != "" && page != "设置" {
 				ui.Row(c).PaddingX(8).Gap(4).Children(func() {
 					ui.Text(c, a.Settings.err).TextColor(theme.Danger).Grow(1)
-					if ui.Button(c, "重试保存设置").Height(28).Disabled(a.Settings.busy).Clicked() {
-						a.Settings.save(a.Settings.draft)
+					label := "重试保存设置"
+					if a.Settings.status == "error" {
+						label = "重新加载设置"
+					}
+					if ui.Button(c, label).Height(28).Disabled(a.Settings.busy).Clicked() {
+						if a.Settings.status == "error" {
+							a.Settings.Load(a.Settings.post, a.Settings.applied)
+						} else {
+							a.Settings.save(a.Settings.draft)
+						}
 					}
 				})
 			}

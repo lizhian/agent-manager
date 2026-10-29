@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/lizhian/agent-manager/internal/mcp"
 	"github.com/lizhian/agent-manager/internal/storage"
@@ -147,5 +148,36 @@ func TestRemoteErrorsAndTimeoutReleaseRequestsWithoutLeakingSecrets(t *testing.T
 				t.Fatal("requests remain after error/timeout", active.Load())
 			}
 		})
+	}
+}
+
+func TestRemoteFailuresKeepSafeProtocolAndNetworkCategories(t *testing.T) {
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			ID any `json:"id"`
+		}
+		json.NewDecoder(r.Body).Decode(&request)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": request.ID, "error": map[string]any{"code": -32602, "message": "secret-payload"}})
+	}))
+	store, err := storage.Open(storage.PathsFromDataDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	service := mcp.New(store)
+	snap, err := service.Create(mcp.Input{Name: "safe-remote", Transport: "http", URL: remote.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	debugger := mcp.NewDebugger(service, mcp.DebugOptions{Timeout: time.Second})
+	_, err = debugger.ListTools(context.Background(), snap.Servers[0].ID)
+	if err == nil || !strings.Contains(err.Error(), "-32602") || strings.Contains(err.Error(), "secret-payload") {
+		t.Fatal("lost safe protocol status or leaked server payload", err)
+	}
+	remote.Close()
+	_, err = debugger.ListTools(context.Background(), snap.Servers[0].ID)
+	if err == nil || !strings.Contains(err.Error(), "网络连接失败") || strings.Contains(err.Error(), remote.URL) {
+		t.Fatal("lost network category or leaked endpoint", err)
 	}
 }
