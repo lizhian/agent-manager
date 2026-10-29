@@ -13,6 +13,7 @@ import (
 
 type SkillsWorkspace struct {
 	writing                                            string
+	previewChanged                                     func(string, float64)
 	anchors                                            map[string]string
 	service                                            *skills.Service
 	post                                               func(func())
@@ -150,7 +151,7 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 	w.listWidth = max(float32(250), min(w.listWidth, maxList))
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 		ui.Row(c).Gap(6).Children(func() {
-			ui.Text(c, "技能仓库").FontSize(18).Bold()
+			ui.Text(c, "技能仓库").FontSize(c.Theme().FontSize + 3).Bold()
 			count, enabled := 0, 0
 			for _, source := range w.snapshot.Sources {
 				count += len(source.Skills)
@@ -160,7 +161,7 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 					}
 				}
 			}
-			ui.Text(c, fmt.Sprintf("%d 来源 · %d Skills · %d 启用 · %d 字符", len(w.snapshot.Sources), count, enabled, w.snapshot.EnabledContentChars)).FontSize(11).Grow(1)
+			ui.Text(c, fmt.Sprintf("%d 来源 · %d Skills · %d 启用 · %d 字符", len(w.snapshot.Sources), count, enabled, w.snapshot.EnabledContentChars)).FontSize(max(float32(10), c.Theme().FontSize-4)).Grow(1)
 			if ui.Button(c, "技能文件夹").Height(28).Clicked() {
 				w.open(w.service.OpenGlobal)
 			}
@@ -224,7 +225,7 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 						if skill.GlobalEnabled {
 							state = "全局启用"
 						}
-						ui.Text(c, state+" · "+skill.Description).FontSize(11).TextColor(c.Theme().TextMuted)
+						ui.Text(c, state+" · "+skill.Description).FontSize(max(float32(10), c.Theme().FontSize-4)).TextColor(c.Theme().TextMuted)
 					}
 				}
 				if shown == 0 {
@@ -268,9 +269,9 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 				w.open(func() error { return w.service.OpenDocument(d.SourceSafe, d.Name, d.Name+"/SKILL.md") })
 			}
 		})
-		ui.Text(c, d.Path).FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Text(c, d.Path).FontSize(max(float32(10), c.Theme().FontSize-4)).TextColor(c.Theme().TextMuted)
 		ui.Text(c, "name: "+d.MetadataName)
-		ui.Text(c, "description: "+d.MetadataDescription).FontSize(13)
+		ui.Text(c, "description: "+d.MetadataDescription).FontSize(c.Theme().FontSize)
 		main := func() {
 			w.anchorBlocks(&w.mainMD, d.Name+"/SKILL.md")
 			w.mainMD.OnLink = func(href string) { w.followLink(href, d.Name+"/SKILL.md") }
@@ -284,8 +285,10 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 			return
 		}
 		ui.Row(c).Gap(4).Children(func() {
-			ui.Checkbox(c, &w.bottom, "底部预览")
-			ui.Text(c, w.document.RelativePath).FontSize(11).Grow(1)
+			if ui.Checkbox(c, &w.bottom, "底部预览").Changed() {
+				w.notifyPreview()
+			}
+			ui.Text(c, w.document.RelativePath).FontSize(max(float32(10), c.Theme().FontSize-4)).Grow(1)
 			doc := *w.document
 			if ui.Button(c, "系统打开").Height(28).Clicked() {
 				w.open(func() error { return w.service.OpenDocument(doc.SourceSafe, doc.SkillName, doc.RelativePath) })
@@ -314,6 +317,7 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 		}
 		if split.Grow(1).MinHeight(0).Changed() {
 			w.previewPercent = max(float32(20), min(float32(80), w.previewPercent))
+			w.notifyPreview()
 			c.Invalidate()
 		}
 	})
