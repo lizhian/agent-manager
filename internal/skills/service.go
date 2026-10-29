@@ -2,6 +2,7 @@
 package skills
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/lizhian/agent-manager/internal/storage"
@@ -39,6 +41,9 @@ type Detail struct {
 }
 type Document struct{ SourceSafe, SkillName, Title, RelativePath, Content string }
 type Options struct {
+	Runner  func(context.Context, string, []string) ([]byte, error)
+	Now     func() string
+	Rename  func(string, string) error
 	Open    func(string) error
 	Symlink func(string, string) error
 }
@@ -46,9 +51,19 @@ type Service struct {
 	store   *storage.Store
 	options Options
 	mu      sync.Mutex
+	writeMu sync.Mutex
 }
 
 func New(store *storage.Store, options Options) *Service {
+	if options.Runner == nil {
+		options.Runner = runSkills
+	}
+	if options.Now == nil {
+		options.Now = func() string { return fmt.Sprint(time.Now().Unix()) }
+	}
+	if options.Rename == nil {
+		options.Rename = os.Rename
+	}
 	if options.Symlink == nil {
 		options.Symlink = os.Symlink
 	}
