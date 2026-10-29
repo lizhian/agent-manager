@@ -38,7 +38,10 @@ type Detail struct {
 	GlobalEnabled                                                                                                bool
 }
 type Document struct{ SourceSafe, SkillName, Title, RelativePath, Content string }
-type Options struct{ Open func(string) error }
+type Options struct {
+	Open    func(string) error
+	Symlink func(string, string) error
+}
 type Service struct {
 	store   *storage.Store
 	options Options
@@ -46,6 +49,9 @@ type Service struct {
 }
 
 func New(store *storage.Store, options Options) *Service {
+	if options.Symlink == nil {
+		options.Symlink = os.Symlink
+	}
 	if options.Open == nil {
 		options.Open = systemOpen
 	}
@@ -258,17 +264,12 @@ func systemOpen(p string) error {
 type frontmatter struct{ Name, Description string }
 
 func metadata(body string) frontmatter {
-	body = strings.TrimPrefix(strings.ReplaceAll(body, "\r\n", "\n"), "\ufeff")
-	lines := strings.Split(body, "\n")
-	if len(lines) < 2 || strings.TrimSpace(lines[0]) != "---" {
+	header, _, found := splitFrontmatter(body)
+	if !found {
 		return frontmatter{}
 	}
-	end := 1
-	for end < len(lines) && strings.TrimSpace(lines[end]) != "---" {
-		end++
-	}
 	var m frontmatter
-	if yaml.Unmarshal([]byte(strings.Join(lines[1:end], "\n")), &m) != nil {
+	if yaml.Unmarshal([]byte(header), &m) != nil {
 		return frontmatter{}
 	}
 	m.Name = strings.TrimSpace(m.Name)
@@ -287,15 +288,22 @@ func (s *Service) OpenURL(raw string) error {
 
 // Keep the original source for character counts and system-open; frontmatter is already shown as metadata.
 func markdownBody(body string) string {
+	_, markdown, found := splitFrontmatter(body)
+	if !found {
+		return body
+	}
+	return markdown
+}
+func splitFrontmatter(body string) (header, markdown string, found bool) {
 	normalized := strings.TrimPrefix(strings.ReplaceAll(body, "\r\n", "\n"), "\ufeff")
 	lines := strings.Split(normalized, "\n")
 	if len(lines) < 2 || strings.TrimSpace(lines[0]) != "---" {
-		return body
+		return "", body, false
 	}
 	for i := 1; i < len(lines); i++ {
 		if strings.TrimSpace(lines[i]) == "---" {
-			return strings.Join(lines[i+1:], "\n")
+			return strings.Join(lines[1:i], "\n"), strings.Join(lines[i+1:], "\n"), true
 		}
 	}
-	return body
+	return "", body, false
 }
