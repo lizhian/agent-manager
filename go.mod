@@ -6,6 +6,7 @@ require (
 	github.com/egoist/mygo v0.7.3
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
