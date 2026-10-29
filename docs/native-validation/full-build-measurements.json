@@ -1,0 +1,20 @@
+[
+  {
+    "phase": "first-empty-compiler-cache",
+    "seconds": 23.597,
+    "exitCode": 0,
+    "revision": "994446f75275408148c9c023922235ca1380973a",
+    "command": "go build ./cmd/agent-manager",
+    "mode": "default development build; CGO SQLite; no packaging",
+    "cache": "isolated initially empty GOCACHE, existing module cache; dependency download excluded"
+  },
+  {
+    "phase": "comment-change-incremental",
+    "seconds": 2.723,
+    "exitCode": 0,
+    "revision": "994446f75275408148c9c023922235ca1380973a",
+    "command": "go build ./cmd/agent-manager",
+    "mode": "default development build; CGO SQLite; no packaging",
+    "cache": "isolated initially empty GOCACHE, existing module cache; dependency download excluded"
+  }
+]
