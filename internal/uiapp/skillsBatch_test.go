@@ -115,3 +115,75 @@ func TestBatchSummaryKeepsFailedSourceVisible(t *testing.T) {
 		t.Fatal("partial result missing", w.progress, w.err)
 	}
 }
+
+func TestEmptyUpdatedSourceKeepsUpdateAndDeleteControls(t *testing.T) {
+	store, err := storage.Open(storage.PathsFromDataDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	_, err = store.DB.Exec(`INSERT INTO skill_sources VALUES(1,'owner/repo','owner_repo','','');INSERT INTO skills VALUES(1,1,'gone','',0,'','')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(store.Paths.Root, "skills/owner_repo/gone")
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("# Gone"), 0600)
+	service := skills.New(store, skills.Options{Runner: func(context.Context, string, []string) ([]byte, error) { return []byte("[]"), nil }})
+	if _, err = service.SyncSource(context.Background(), "owner/repo", nil); err != nil {
+		t.Fatal(err)
+	}
+	w := NewSkillsWorkspace(service)
+	queue := make(chan func(), 16)
+	w.Load(func(fn func()) { queue <- fn })
+	wait := func() {
+		t.Helper()
+		select {
+		case fn := <-queue:
+			fn()
+		case <-time.After(3 * time.Second):
+			t.Fatal("operation timeout")
+		}
+	}
+	wait()
+	tt := ui.NewTester(w.View, 960, 640)
+	if !tt.HasText("1 来源 · 0 Skills") || !tt.HasText("上游已无 Skill") {
+		t.Fatal("empty source count or explanation missing")
+	}
+	if _, ok := tt.Find("更新 owner/repo"); !ok {
+		t.Fatal("empty source update is inaccessible")
+	}
+	if _, ok := tt.Find("删除来源 owner/repo"); !ok {
+		t.Fatal("empty source delete is inaccessible")
+	}
+	if tt.HasText("没有匹配结果") {
+		t.Fatal("empty source incorrectly reported a filter mismatch")
+	}
+	if err = tt.Click("只看启用"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tt.Find("更新 owner/repo"); ok {
+		t.Fatal("enabled-only filter included an empty source")
+	}
+	tt.Click("只看启用")
+	tt.Click("搜索 Skills")
+	tt.Type("owner")
+	if _, ok := tt.Find("更新 owner/repo"); !ok {
+		t.Fatal("source search lost empty source")
+	}
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("unmatched")
+	if _, ok := tt.Find("更新 owner/repo"); ok {
+		t.Fatal("search included unmatched empty source")
+	}
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Key(0, ui.KeyBackspace)
+	if err = tt.Click("删除来源 owner/repo"); err != nil {
+		t.Fatal(err)
+	}
+	wait()
+	tt.Frame()
+	if !tt.HasText("将删除 0 个 Skills") {
+		t.Fatal("empty source delete impact unavailable")
+	}
+}

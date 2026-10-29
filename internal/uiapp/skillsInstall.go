@@ -59,8 +59,11 @@ func (w *SkillsWorkspace) syncSource(source string) {
 			w.snapshot = result.Snapshot
 			w.status = "ready"
 			w.progress = fmt.Sprintf("同步完成：%d 个 Skills，清理 %d 个失效项", result.InstalledCount, result.RemovedCount)
+			wasInstallOpen := w.installOpen
 			w.installOpen = false
-			w.installTrigger.Focus()
+			if wasInstallOpen {
+				w.installTrigger.Focus()
+			}
 			if w.detail != nil {
 				for _, s := range result.Snapshot.Sources {
 					if s.SourceSafe == w.detail.SourceSafe {

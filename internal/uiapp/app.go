@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/lizhian/agent-manager/internal/agentsmd"
 	"github.com/lizhian/agent-manager/internal/settings"
+	"math"
 )
 
 type App struct {
@@ -60,10 +61,16 @@ func (a *App) View(c *ui.Context) {
 		if page == "" {
 			page = pages[0]
 		}
+		sidebarWidth := float32(104)
+		for _, name := range pages {
+			textWidth, _ := c.MeasureText(0, ui.Span{Text: name, Font: theme.Font, Size: theme.FontSize})
+			// Account for the explicit button padding/border and sidebar padding, on the 2px grid.
+			sidebarWidth = max(sidebarWidth, float32(math.Ceil(float64(textWidth+30)/2)*2))
+		}
 		if len(pages) > 1 {
-			ui.Column(c).Width(128).HeightPercent(100).Padding(6).Gap(4).Background(theme.Surface).Children(func() {
+			ui.Column(c).Width(sidebarWidth).HeightPercent(100).Padding(6).Gap(4).Background(theme.Surface).Children(func() {
 				for _, name := range pages {
-					b := ui.Button(c, name).Height(28).WidthPercent(100)
+					b := ui.Button(c, name).Height(28).Padding(2, 8).WidthPercent(100)
 					if name == page {
 						b.Border(1, theme.Accent)
 					}
@@ -77,7 +84,7 @@ func (a *App) View(c *ui.Context) {
 		width, _ := c.Size()
 		available := width
 		if len(pages) > 1 {
-			available -= 128
+			available -= sidebarWidth
 		}
 		a.Agents.viewportWidth = available
 		if a.Skills != nil {

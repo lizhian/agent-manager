@@ -214,7 +214,7 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 		ui.Checkbox(c, &w.globalOnly, "只看启用")
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).WidthPercent(100).Gap(4).Children(func() {
-				shown := 0
+				shownSources := 0
 				needle := strings.ToLower(strings.TrimSpace(w.query))
 				for _, source := range w.snapshot.Sources {
 					source := source
@@ -224,9 +224,11 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 							filtered = append(filtered, skill)
 						}
 					}
-					if len(filtered) == 0 {
+					emptySource := len(source.Skills) == 0 && !w.globalOnly && (needle == "" || strings.Contains(strings.ToLower(source.Source), needle))
+					if len(filtered) == 0 && !emptySource {
 						continue
 					}
+					shownSources++
 					ui.Row(c).Gap(4).Children(func() {
 						ui.Text(c, source.Source).Bold().Grow(1)
 						if ui.Button(c, "更新").Label("更新 " + source.Source).Height(26).Disabled(w.writing != "").Clicked() {
@@ -237,9 +239,11 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 							w.prepareDelete(source.SourceSafe)
 						}
 					})
+					if emptySource {
+						ui.Text(c, "上游已无 Skill，可更新来源重新检查。").FontSize(c.Theme().FontSize).TextColor(c.Theme().TextMuted)
+					}
 					for _, skill := range filtered {
 						skill := skill
-						shown++
 						ui.Row(c).Gap(4).Height(28).Children(func() {
 							enabled := skill.GlobalEnabled
 							if ui.Switch(c, &enabled).Label("全局启用 " + source.SourceSafe + "/" + skill.Name).Disabled(w.writing != "").Changed() {
@@ -260,7 +264,7 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 						ui.Text(c, state+" · "+skill.Description).FontSize(max(float32(10), c.Theme().FontSize-4)).TextColor(c.Theme().TextMuted)
 					}
 				}
-				if shown == 0 {
+				if shownSources == 0 {
 					if len(w.snapshot.Sources) == 0 {
 						ui.Text(c, "还没有来源，可打开技能文件夹核对现有内容。")
 					} else {
