@@ -18,6 +18,10 @@ type AgentsWorkspace struct {
 	draftMode                 string
 	title, content            string
 	combined                  bool
+	query                     string
+	filter                    int
+	bottom                    bool
+	previewChanged            func(string, float64)
 	deleteOpen                bool
 	deleteTrigger             ui.Handle
 	saveTrigger               ui.Handle
@@ -94,8 +98,16 @@ func (w *AgentsWorkspace) View(c *ui.Context) {
 	w.listWidth = max(float32(240), min(w.listWidth, maxList))
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
-			ui.Text(c, "AGENTS.md").FontSize(18).Bold()
+			ui.Text(c, "AGENTS.md").FontSize(t.FontSize + 3).Bold()
 			ui.Text(c, fmt.Sprintf("%d 个片段 · 已启用 %d 字符", len(w.snapshot.Fragments), w.snapshot.EnabledContentChars)).TextColor(t.TextMuted).Grow(1)
+			if ui.Button(c, "打开目录").Height(28).Disabled(w.busy).Clicked() {
+				w.run(func() (agentsmd.Snapshot, error) {
+					if err := w.service.OpenFolder(); err != nil {
+						return agentsmd.Snapshot{}, err
+					}
+					return w.service.Snapshot()
+				}, nil)
+			}
 			if ui.Button(c, "新增片段").Height(28).Bind(&w.newTrigger).Disabled(w.busy).Clicked() {
 				w.selected = 0
 				w.title = ""
@@ -149,48 +161,27 @@ func (w *AgentsWorkspace) View(c *ui.Context) {
 		w.deleteTrigger.Focus(c)
 	}
 }
-func (w *AgentsWorkspace) list(c *ui.Context) {
-	ui.Column(c).Fill().Padding(4).Gap(4).Children(func() {
-		ui.Text(c, w.snapshot.TargetPath).FontSize(11).TextColor(c.Theme().TextMuted)
-		if len(w.snapshot.Fragments) == 0 {
-			ui.Text(c, "还没有片段，点击“新增片段”开始。")
-			return
-		}
-		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).WidthPercent(100).Children(func() {
-				for _, fragment := range w.snapshot.Fragments {
-					f := fragment
-					ui.Row(c).Key(f.ID).Height(40).Gap(4).Children(func() {
-						enabled := f.Enabled
-						if ui.Switch(c, &enabled).Label("启用 " + f.Title).Disabled(w.busy).Changed() {
-							w.run(func() (agentsmd.Snapshot, error) { return w.service.SetEnabled(f.ID, enabled) }, nil)
-						}
-						b := ui.Button(c, f.Title).Grow(1).Height(28)
-						if w.selected == f.ID {
-							b.Border(1, c.Theme().Accent)
-						}
-						if b.Clicked() {
-							w.selectFragment(f)
-						}
-					})
-				}
-			})
-		})
-	})
-}
 func (w *AgentsWorkspace) editor(c *ui.Context) {
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 		ui.Row(c).Gap(4).Children(func() {
 			ui.Checkbox(c, &w.combined, "组合预览")
+			if ui.Checkbox(c, &w.bottom, "底部预览").Changed() {
+				w.notifyPreview()
+			}
 			if w.busy {
 				ui.Text(c, "正在保存…").TextColor(c.Theme().TextMuted)
 			}
 		})
-		width, _ := c.Size()
+		width, height := c.Size()
 		room := width - w.listWidth - 26
-		lower := max(float32(20), min(float32(50), 220/max(room, 1)*100))
+		minimum := float32(220)
+		if w.bottom {
+			room = height - 100
+			minimum = 160
+		}
+		lower := max(float32(20), min(float32(50), minimum/max(room, 1)*100))
 		w.previewPercent = max(lower, min(w.previewPercent, 100-lower))
-		if ui.SplitPercent(c, &w.previewPercent, func() {
+		editor := func() {
 			ui.Column(c).Fill().Gap(6).Padding(4).Children(func() {
 				if w.draftMode == "" || w.draftMode == "none" {
 					ui.Text(c, "选择片段以编辑，或新增片段。")
@@ -211,7 +202,8 @@ func (w *AgentsWorkspace) editor(c *ui.Context) {
 					}
 				})
 			})
-		}, func() {
+		}
+		preview := func() {
 			ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 				body, title := w.content, "单片段预览"
 				if w.combined {
@@ -225,8 +217,16 @@ func (w *AgentsWorkspace) editor(c *ui.Context) {
 					ui.Scroll(c).Grow(1).MinHeight(0).Children(func() { markdown.View(c, body, &w.md) })
 				}
 			})
-		}).Grow(1).MinHeight(0).Changed() {
+		}
+		var split ui.Element
+		if w.bottom {
+			split = ui.SplitVerticalPercent(c, &w.previewPercent, editor, preview)
+		} else {
+			split = ui.SplitPercent(c, &w.previewPercent, editor, preview)
+		}
+		if split.Grow(1).MinHeight(0).Changed() {
 			w.previewPercent = max(lower, min(w.previewPercent, 100-lower))
+			w.notifyPreview()
 			c.Invalidate()
 		}
 	})

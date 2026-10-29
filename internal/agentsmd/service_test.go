@@ -6,6 +6,7 @@ import (
 	"github.com/lizhian/agent-manager/internal/storage"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -217,5 +218,88 @@ func TestCommitFailureRestoresFilesAfterGeneration(t *testing.T) {
 	}
 	if _, err = os.Stat(target + ".agent-manager-backup"); !os.IsNotExist(err) {
 		t.Fatal("backup changed", err)
+	}
+}
+
+func TestReorderPersistsCompleteOrderAndRegenerates(t *testing.T) {
+	p := storage.PathsFromDataDir(t.TempDir())
+	store, err := storage.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	s := agentsmd.New(store, agentsmd.Options{})
+	for _, title := range []string{"First", "Second", "Third"} {
+		snap, err := s.Create(title, "# "+title)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = s.SetEnabled(snap.Fragments[len(snap.Fragments)-1].ID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, ids := range [][]int64{{1, 2}, {1, 1, 3}, {1, 2, 99}} {
+		if _, err = s.Reorder(ids); err == nil {
+			t.Fatal("accepted invalid order", ids)
+		}
+	}
+	snap, err := s.Reorder([]int64{3, 1, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Fragments[0].ID != 3 || snap.Fragments[1].ID != 1 || snap.Fragments[2].ID != 2 {
+		t.Fatal(snap)
+	}
+	want := agentsmd.ManagedHeader + "\n\n# Third\n\n# First\n\n# Second\n"
+	got, _ := os.ReadFile(snap.TargetPath)
+	if string(got) != want || snap.CombinedContent != want {
+		t.Fatal(string(got), snap.CombinedContent)
+	}
+	failing := agentsmd.New(store, agentsmd.Options{WriteAtomic: func(path string, data []byte) error { return fmt.Errorf("injected reorder write failure") }})
+	if _, err = failing.Reorder([]int64{1, 2, 3}); err == nil {
+		t.Fatal("expected file failure")
+	}
+	persistedAfterFile, err := s.Snapshot()
+	if err != nil || persistedAfterFile.Fragments[0].ID != 3 {
+		t.Fatal(persistedAfterFile, err)
+	}
+	got, _ = os.ReadFile(snap.TargetPath)
+	if string(got) != want {
+		t.Fatal("failed reorder changed generated file")
+	}
+	if _, err = store.DB.Exec("CREATE TRIGGER reject_reorder BEFORE UPDATE ON agents_md_fragments BEGIN SELECT RAISE(ABORT,'order blocked'); END"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Reorder([]int64{1, 2, 3}); err == nil {
+		t.Fatal("expected save failure")
+	}
+	persisted, err := s.Snapshot()
+	if err != nil || persisted.Fragments[0].ID != 3 {
+		t.Fatal(persisted, err)
+	}
+	got, _ = os.ReadFile(snap.TargetPath)
+	if string(got) != want {
+		t.Fatal(string(got))
+	}
+}
+
+func TestOpenFolderUsesInjectedSystemAdapter(t *testing.T) {
+	paths := storage.PathsFromDataDir(t.TempDir())
+	store, err := storage.Open(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	opened := ""
+	s := agentsmd.New(store, agentsmd.Options{OpenFolder: func(path string) error { opened = path; return fmt.Errorf("Finder unavailable") }})
+	if err = s.OpenFolder(); err == nil || !strings.Contains(err.Error(), "Finder unavailable") || !strings.Contains(err.Error(), paths.AgentsDir) {
+		t.Fatal(err)
+	}
+	if opened != paths.AgentsDir {
+		t.Fatal(opened)
+	}
+	info, err := os.Stat(opened)
+	if err != nil || !info.IsDir() {
+		t.Fatal(info, err)
 	}
 }
