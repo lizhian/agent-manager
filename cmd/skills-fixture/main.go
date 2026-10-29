@@ -22,16 +22,23 @@ func main() {
 			mode = strings.TrimSpace(string(b))
 		}
 	}
-	if mode == "fail" {
-		fmt.Fprintln(os.Stderr, "本地验证：模拟 npx 来源下载失败")
-		os.Exit(3)
-	}
 	cwd, e := os.Getwd()
 	if e != nil {
 		panic(e)
 	}
+	source := ""
+	if len(args) > 3 && args[2] == "add" {
+		source = args[3]
+		_ = os.WriteFile(filepath.Join(cwd, ".fixture-source"), []byte(source), 0600)
+	} else if b, e := os.ReadFile(filepath.Join(cwd, ".fixture-source")); e == nil {
+		source = string(b)
+	}
+	if mode == "fail" || (mode == "mixed" && source == "example/failure") {
+		fmt.Fprintln(os.Stderr, "本地验证：模拟 npx 来源下载失败")
+		os.Exit(3)
+	}
 	names := []string{"keep", "gone"}
-	if mode == "2" {
+	if mode == "2" || mode == "mixed" {
 		names = []string{"keep", "new"}
 	}
 	switch args[2] {

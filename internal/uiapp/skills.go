@@ -12,6 +12,10 @@ import (
 )
 
 type SkillsWorkspace struct {
+	deleteSourceOpen                                   bool
+	deleteImpact                                       *skills.RemoveImpact
+	deleteSourceTrigger                                *ui.Handle
+	deleteHandles                                      map[string]*ui.Handle
 	installOpen                                        bool
 	installSource, progress                            string
 	installTrigger                                     ui.Handle
@@ -31,7 +35,7 @@ type SkillsWorkspace struct {
 }
 
 func NewSkillsWorkspace(service *skills.Service) *SkillsWorkspace {
-	return &SkillsWorkspace{service: service, status: "loading", anchors: map[string]string{}, listWidth: 290, previewPercent: 50}
+	return &SkillsWorkspace{service: service, status: "loading", anchors: map[string]string{}, deleteHandles: map[string]*ui.Handle{}, listWidth: 290, previewPercent: 50}
 }
 func (w *SkillsWorkspace) Load(post func(func())) {
 	w.post = post
@@ -165,6 +169,9 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 				}
 			}
 			ui.Text(c, fmt.Sprintf("%d 来源 · %d Skills · %d 启用 · %d 字符", len(w.snapshot.Sources), count, enabled, w.snapshot.EnabledContentChars)).FontSize(max(float32(10), c.Theme().FontSize-4)).Grow(1)
+			if ui.Button(c, "全部更新").Height(28).Disabled(w.writing != "" || len(w.snapshot.Sources) == 0).Clicked() {
+				w.updateAll()
+			}
 			if ui.Button(c, "安装来源").Bind(&w.installTrigger).Height(28).Disabled(w.writing != "").Clicked() {
 				w.installOpen = true
 				w.err = ""
@@ -195,6 +202,7 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 		}
 	})
 	w.installDialog(c)
+	w.sourceDeleteDialog(c)
 }
 func (w *SkillsWorkspace) list(c *ui.Context) {
 	ui.Column(c).Fill().Padding(4).Gap(4).Children(func() {
@@ -219,6 +227,10 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 						ui.Text(c, source.Source).Bold().Grow(1)
 						if ui.Button(c, "更新").Label("更新 " + source.Source).Height(26).Disabled(w.writing != "").Clicked() {
 							w.syncSource(source.Source)
+						}
+						if ui.Button(c, "删除").TextColor(c.Theme().Danger).Bind(w.sourceDeleteHandle(source.SourceSafe)).Label("删除来源 " + source.Source).Height(26).Disabled(w.writing != "").Clicked() {
+							w.deleteSourceTrigger = w.sourceDeleteHandle(source.SourceSafe)
+							w.prepareDelete(source.SourceSafe)
 						}
 					})
 					for _, skill := range filtered {
@@ -273,7 +285,7 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 			}
 			ui.Text(c, "全局启用").FontSize(13)
 			if w.writing != "" {
-				ui.Text(c, "正在更新全局状态…").FontSize(11)
+				ui.Text(c, "操作进行中…").FontSize(11)
 			}
 		})
 		ui.Row(c).Gap(4).Children(func() {
