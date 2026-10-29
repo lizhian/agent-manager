@@ -160,3 +160,20 @@ func TestRelativeLinksAndSystemOpeningUseSameDocumentBoundary(t *testing.T) {
 		t.Fatal(opened, err)
 	}
 }
+func TestDetailSeparatesFrontmatterFromMarkdownPreview(t *testing.T) {
+	home := t.TempDir()
+	store, err := storage.Open(storage.PathsFromHome(home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	store.DB.Exec(`INSERT INTO skill_sources VALUES(1,'owner/repo','owner_repo','','');INSERT INTO skills VALUES(1,1,'demo','说明',0,'','')`)
+	dir := filepath.Join(home, ".agent-manager/skills/owner_repo/demo")
+	os.MkdirAll(dir, 0700)
+	body := "\ufeff---\r\nname: Demo\r\ndescription: metadata\r\n---\r\n# 正文\r\n"
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(body), 0600)
+	d, err := skills.New(store, skills.Options{}).Detail("owner_repo", "demo")
+	if err != nil || d.Markdown != "# 正文\n" || d.Content != body {
+		t.Fatalf("detail %+v %v", d, err)
+	}
+}

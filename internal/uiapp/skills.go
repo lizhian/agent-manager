@@ -12,6 +12,7 @@ import (
 )
 
 type SkillsWorkspace struct {
+	writing                                            string
 	previewChanged                                     func(string, float64)
 	anchors                                            map[string]string
 	service                                            *skills.Service
@@ -164,7 +165,7 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 			if ui.Button(c, "技能文件夹").Height(28).Clicked() {
 				w.open(w.service.OpenGlobal)
 			}
-			if ui.Button(c, "重新加载").Height(28).Disabled(w.status == "loading").Clicked() {
+			if ui.Button(c, "重新加载").Height(28).Disabled(w.status == "loading" || w.writing != "").Clicked() {
 				w.Load(w.post)
 			}
 		})
@@ -207,13 +208,19 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 					for _, skill := range filtered {
 						skill := skill
 						shown++
-						b := ui.Button(c, skill.Name).Label("查看 " + source.SourceSafe + "/" + skill.Name).Height(28).WidthPercent(100)
-						if w.detail != nil && w.detail.SourceSafe == source.SourceSafe && w.detail.Name == skill.Name {
-							b.Border(1, c.Theme().Accent)
-						}
-						if b.Clicked() {
-							w.selectSkill(source.SourceSafe, skill.Name)
-						}
+						ui.Row(c).Gap(4).Height(28).Children(func() {
+							enabled := skill.GlobalEnabled
+							if ui.Switch(c, &enabled).Label("全局启用 " + source.SourceSafe + "/" + skill.Name).Disabled(w.writing != "").Changed() {
+								w.toggleSkill(source.SourceSafe, skill.Name, enabled)
+							}
+							b := ui.Button(c, skill.Name).Label("查看 " + source.SourceSafe + "/" + skill.Name).Height(28).Grow(1)
+							if w.detail != nil && w.detail.SourceSafe == source.SourceSafe && w.detail.Name == skill.Name {
+								b.Border(1, c.Theme().Accent)
+							}
+							if b.Clicked() {
+								w.selectSkill(source.SourceSafe, skill.Name)
+							}
+						})
 						state := "未启用"
 						if skill.GlobalEnabled {
 							state = "全局启用"
@@ -243,6 +250,16 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 			return
 		}
 		d := *w.detail
+		enabled := d.GlobalEnabled
+		ui.Row(c).Gap(4).Children(func() {
+			if ui.Switch(c, &enabled).Label("详情全局启用").Disabled(w.writing != "").Changed() {
+				w.toggleSkill(d.SourceSafe, d.Name, enabled)
+			}
+			ui.Text(c, "全局启用").FontSize(13)
+			if w.writing != "" {
+				ui.Text(c, "正在更新全局状态…").FontSize(11)
+			}
+		})
 		ui.Row(c).Gap(4).Children(func() {
 			ui.Text(c, d.Name).Bold().Grow(1)
 			if ui.Button(c, "打开目录").Height(28).Clicked() {
@@ -258,7 +275,7 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 		main := func() {
 			w.anchorBlocks(&w.mainMD, d.Name+"/SKILL.md")
 			w.mainMD.OnLink = func(href string) { w.followLink(href, d.Name+"/SKILL.md") }
-			ui.Scroll(c).Grow(1).MinHeight(0).Children(func() { markdown.View(c, d.Content, &w.mainMD) })
+			ui.Scroll(c).Grow(1).MinHeight(0).Children(func() { markdown.View(c, d.Markdown, &w.mainMD) })
 		}
 		if w.documentLoading {
 			ui.Text(c, "正在读取关联文档…")
@@ -315,4 +332,34 @@ func (w *SkillsWorkspace) anchorBlocks(options *markdown.Options, current string
 		}
 		return false
 	}
+}
+
+func (w *SkillsWorkspace) toggleSkill(source, name string, enabled bool) {
+	if w.writing != "" || w.post == nil {
+		return
+	}
+	w.writing = source + "/" + name
+	w.err = ""
+	go func() {
+		snap, err := w.service.SetGlobalEnabled(source, name, enabled)
+		w.post(func() {
+			w.writing = ""
+			if err != nil {
+				w.err = err.Error()
+				return
+			}
+			w.snapshot = snap
+			if w.detail != nil && w.detail.SourceSafe == source && w.detail.Name == name {
+				for _, s := range snap.Sources {
+					if s.SourceSafe == source {
+						for _, skill := range s.Skills {
+							if skill.Name == name {
+								w.detail.GlobalEnabled = skill.GlobalEnabled
+							}
+						}
+					}
+				}
+			}
+		})
+	}()
 }
