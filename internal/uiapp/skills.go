@@ -12,6 +12,9 @@ import (
 )
 
 type SkillsWorkspace struct {
+	installOpen                                        bool
+	installSource, progress                            string
+	installTrigger                                     ui.Handle
 	writing                                            string
 	previewChanged                                     func(string, float64)
 	anchors                                            map[string]string
@@ -162,6 +165,10 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 				}
 			}
 			ui.Text(c, fmt.Sprintf("%d 来源 · %d Skills · %d 启用 · %d 字符", len(w.snapshot.Sources), count, enabled, w.snapshot.EnabledContentChars)).FontSize(max(float32(10), c.Theme().FontSize-4)).Grow(1)
+			if ui.Button(c, "安装来源").Bind(&w.installTrigger).Height(28).Disabled(w.writing != "").Clicked() {
+				w.installOpen = true
+				w.err = ""
+			}
 			if ui.Button(c, "技能文件夹").Height(28).Clicked() {
 				w.open(w.service.OpenGlobal)
 			}
@@ -169,6 +176,9 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 				w.Load(w.post)
 			}
 		})
+		if w.progress != "" {
+			ui.Text(c, w.progress).FontSize(11)
+		}
 		if w.err != "" {
 			ui.Text(c, w.err).TextColor(c.Theme().Danger)
 		}
@@ -184,6 +194,7 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 			}
 		}
 	})
+	w.installDialog(c)
 }
 func (w *SkillsWorkspace) list(c *ui.Context) {
 	ui.Column(c).Fill().Padding(4).Gap(4).Children(func() {
@@ -204,7 +215,12 @@ func (w *SkillsWorkspace) list(c *ui.Context) {
 					if len(filtered) == 0 {
 						continue
 					}
-					ui.Text(c, source.Source).Bold()
+					ui.Row(c).Gap(4).Children(func() {
+						ui.Text(c, source.Source).Bold().Grow(1)
+						if ui.Button(c, "更新").Label("更新 " + source.Source).Height(26).Disabled(w.writing != "").Clicked() {
+							w.syncSource(source.Source)
+						}
+					})
 					for _, skill := range filtered {
 						skill := skill
 						shown++
@@ -332,34 +348,4 @@ func (w *SkillsWorkspace) anchorBlocks(options *markdown.Options, current string
 		}
 		return false
 	}
-}
-
-func (w *SkillsWorkspace) toggleSkill(source, name string, enabled bool) {
-	if w.writing != "" || w.post == nil {
-		return
-	}
-	w.writing = source + "/" + name
-	w.err = ""
-	go func() {
-		snap, err := w.service.SetGlobalEnabled(source, name, enabled)
-		w.post(func() {
-			w.writing = ""
-			if err != nil {
-				w.err = err.Error()
-				return
-			}
-			w.snapshot = snap
-			if w.detail != nil && w.detail.SourceSafe == source && w.detail.Name == name {
-				for _, s := range snap.Sources {
-					if s.SourceSafe == source {
-						for _, skill := range s.Skills {
-							if skill.Name == name {
-								w.detail.GlobalEnabled = skill.GlobalEnabled
-							}
-						}
-					}
-				}
-			}
-		})
-	}()
 }
