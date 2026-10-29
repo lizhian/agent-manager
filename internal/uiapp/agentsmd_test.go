@@ -235,3 +235,54 @@ func TestPersistentListEdgeScrollAndEscapeCancelDrag(t *testing.T) {
 		t.Fatal(snap, err)
 	}
 }
+
+func TestPendingWriteCompletionPreservesNewBrowsingContext(t *testing.T) {
+	for _, action := range []string{"delete", "save"} {
+		t.Run(action, func(t *testing.T) {
+			store, err := storage.Open(storage.PathsFromDataDir(t.TempDir()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			service := agentsmd.New(store, agentsmd.Options{})
+			service.Create("First", "# First")
+			service.Create("Second", "# Second")
+			app := uiapp.NewApp(service)
+			updates := make(chan func(), 8)
+			app.Start(func(fn func()) { updates <- fn })
+			tt := ui.NewTester(app.View, 960, 640)
+			select {
+			case fn := <-updates:
+				fn()
+				tt.Frame()
+			case <-time.After(3 * time.Second):
+				t.Fatal("load timeout")
+			}
+			tt.Click("First")
+			if action == "delete" {
+				tt.Click("删除片段")
+				tt.Click("删除")
+				tt.Key(0, ui.KeyEscape)
+			} else {
+				tt.Click("保存片段")
+			}
+			var complete func()
+			select {
+			case complete = <-updates:
+			case <-time.After(3 * time.Second):
+				t.Fatal("write timeout")
+			}
+			tt.Click("Second")
+			complete()
+			tt.Frame()
+			if err = tt.Click("片段名称"); err != nil {
+				t.Fatal("write completion discarded selected fragment", err)
+			}
+			tt.Key(ui.Cmd, ui.KeyA)
+			tt.Key(ui.Cmd, ui.KeyC)
+			if tt.Clipboard() != "Second" {
+				t.Fatal("write completion changed selected fragment", tt.Clipboard())
+			}
+		})
+	}
+}
