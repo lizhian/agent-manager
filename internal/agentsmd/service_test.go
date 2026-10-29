@@ -179,3 +179,43 @@ func TestExistingDatabaseIDsOrderAndOtherDomainsSurvive(t *testing.T) {
 		t.Fatal(snap, err)
 	}
 }
+
+func TestCommitFailureRestoresFilesAfterGeneration(t *testing.T) {
+	p := storage.PathsFromDataDir(t.TempDir())
+	store, err := storage.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	writes := 0
+	s := agentsmd.New(store, agentsmd.Options{WriteAtomic: func(path string, data []byte) error { writes++; return agentsmd.AtomicWrite(path, data) }})
+	os.MkdirAll(p.AgentsDir, 0700)
+	target := filepath.Join(p.AgentsDir, "AGENTS.md")
+	os.WriteFile(target, []byte("manual"), 0600)
+	snap, err := s.Create("First", "# First")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Defer this real FK violation until COMMIT, after the generated file was written.
+	_, err = store.DB.Exec(`CREATE TRIGGER reject_commit AFTER UPDATE ON agents_md_fragments BEGIN INSERT INTO skills(source_id,name) VALUES(999,'invalid'); END; PRAGMA defer_foreign_keys=ON;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.SetEnabled(snap.Fragments[0].ID, true); err == nil {
+		t.Fatal("expected commit failure")
+	}
+	if writes == 0 {
+		t.Fatal("failure occurred before file generation, not at commit")
+	}
+	snap, err = s.Snapshot()
+	if err != nil || snap.Fragments[0].Enabled {
+		t.Fatal(snap, err)
+	}
+	got, _ := os.ReadFile(target)
+	if string(got) != "manual" {
+		t.Fatal(string(got))
+	}
+	if _, err = os.Stat(target + ".agent-manager-backup"); !os.IsNotExist(err) {
+		t.Fatal("backup changed", err)
+	}
+}
