@@ -13,4 +13,4 @@ go vet ./...
 go build ./cmd/agent-manager
 ```
 
-Existing Svelte/Tauri implementation and independent `native-sample` remain until later migration tickets are complete.
+The formal application builds through `scripts/check.sh` and `scripts/package-macos.sh`; the independent `native-sample` remains as historical validation.

@@ -1,50 +1,38 @@
 # Agent Manager
 
-用于管理 Agent Skills、MCP、Agent 配置和全局 AGENTS.md 的桌面应用。
+Go + MyGo 原生桌面工具，管理 Skills、独立 MCP 服务配置/工具调试、全局 AGENTS.md 和界面设置。界面由原生绘制，不启动 WebView；应用启动、构建和打包使用 Go，不需要 Node 或 Rust。
 
-当前已实现 Skills Manager 和 AGENTS.md Manager：
+本轮支持并验收 macOS ARM64。Windows、Linux、macOS Intel 尚未交付；见 [平台范围决定](docs/adr/0003-macos-arm-validation-scope.md)。应用身份为 `com.lizhian.agentmanager`，版本唯一来源为 [Info.plist](assets/macos/Info.plist) 的 `CFBundleShortVersionString`。
 
-- 通过 `owner/repo` 安装和更新 GitHub Skill 来源。
-- 将来源镜像到 `~/.agent-manager/skills/`，使用 `~/.agent-manager/agent-manager.db` 保存应用设置和 Skills 元数据。
-- 通过单个开关将 Skill 全局启用到 `~/.agents/skills/`，点击后立即生效。
-- 更新时保留仍存在 Skill 的启用状态，并清理上游已删除 Skill 的受管软链。
-- 支持树状浏览、应用内查看 `SKILL.md`、逐来源更新和全部更新。
-- 删除来源前展示影响范围，并同步清理全局激活链接。
-- 使用 Markdown 片段维护全局规则，支持新增、查看、修改、删除、启用和拖拽排序。
-- 按启用片段的顺序生成 `~/.agents/AGENTS.md`；首次接管已有文件时自动保留备份，全部禁用后恢复原文件。
+## 启动与开发
 
-## Stack
+需要 Go 1.27.3（见 `.go-version`）和 Xcode Command Line Tools；SQLite 驱动需要 CGO。MyGo 固定为 v0.7.3。
 
-- Tauri v2
-- Rust backend
-- SQLite
-- SvelteKit + TypeScript frontend
-- Vite
-
-## Development
-
-```bash
-npm install
-npm run tauri dev
+```sh
+go run ./cmd/agent-manager
+# 隔离数据库、镜像与受管文件，不接触真实用户数据：
+go run ./cmd/agent-manager --data-dir /tmp/agent-manager-validation --minimum
 ```
 
-Skills 的安装和更新依赖本机可运行 `npx skills`。
+默认窗口1180×760，最小960×640。Skills 安装/更新仍通过外部 `npx skills`，使用这些功能时需要 Node/npm/npx；这不是应用启动或构建依赖。
 
-首次启动新版本时，旧 `~/.agent-manager/install-skills.json` 会在事务导入 SQLite 成功后自动删除。数据库通过 `schema_migrations` 管理后续结构升级；当前包含 `app_settings`、`skill_sources`、`skills` 和 `agents_md_fragments` 业务表。
+## 检查和打包
 
-## Scripts
-
-- `npm run dev` starts the frontend dev server.
-- `npm run build` builds the frontend.
-- `npm run check` runs Svelte type checks.
-- `npm run tauri` runs the Tauri CLI.
-
-## Quality checks
-
-```bash
-npm run check
-npm run build
-cargo fmt --check --manifest-path src-tauri/Cargo.toml
-cargo test --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+```sh
+scripts/check.sh
+scripts/package-macos.sh
 ```
+
+检查运行 Go 格式、公开业务/原生视图测试、race 检查、vet、构建及独立历史样本验证。打包生成 `dist/Agent Manager.app`、版本化 ARM64 zip 和 SHA256。产物为本机 ad hoc 签名，未使用 Developer ID 凭据、未公证。本轮没有实现自动更新。CI 使用 macOS ARM64，tag 与版本不一致时拒绝打包；产物作为 Actions artifacts 保存，不自动发布 GitHub Release。
+
+## 数据与行为
+
+- 元数据与设置：`~/.agent-manager/agent-manager.db`，保留现有 SQLite schema、主键和未迁移字段。
+- Skills 镜像：`~/.agent-manager/skills/`；全局激活：`~/.agents/skills/`。支持来源安装、更新、全部更新、删除影响确认、正文与关联 Markdown。仅处理受管链接，保留手工文件。
+- AGENTS.md：片段保存在 SQLite；启用片段立即按顺序生成 `~/.agents/AGENTS.md`。接管手工文件先备份，全部禁用后恢复。搜索/筛选状态禁排。
+- MCP：stdio、streamable HTTP、SSE 独立配置与调试，默认30秒操作超时，操作结束释放连接/拥有的进程；无需 GAAL 或外部 Agent。
+- 五档字号、系统字体与文档预览位置/比例持久化，Skills 与 AGENTS.md 使用同一偏好。
+
+`--data-dir DIR` 将上述目录分别置于 `DIR/.agent-manager` 和 `DIR/.agents`。自动测试只使用临时目录、fake 外部命令及可控本地 MCP 服务。旧 JSON catalog 由 Skills 模块在事务导入和链接迁移成功后处理；旧 Agents/分发数据、GAAL 文件与外部 Agent 配置保留。
+
+开发边界见 [AGENTS.md](AGENTS.md)。历史样本及其证据位于 [native-sample](native-sample/README.md)；它只用于早期验证，最终集成验收另行记录。
