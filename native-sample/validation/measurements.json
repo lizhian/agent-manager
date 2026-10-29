@@ -1,0 +1,83 @@
+[
+  {
+    "name": "frontend-build",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "seconds": 8.065,
+    "exitCode": 0
+  },
+  {
+    "name": "native-clean-compiler-cache",
+    "seconds": 7.018,
+    "exitCode": 0,
+    "cache": "isolated GOCACHE; module cache warm; dependency downloads excluded",
+    "sourceCommit": "1fce387"
+  },
+  {
+    "name": "rust-clippy",
+    "seconds": 19.723,
+    "exitCode": 0
+  },
+  {
+    "name": "native-comment-incremental",
+    "seconds": 0.575,
+    "exitCode": 0,
+    "cache": "isolated GOCACHE; module cache warm; dependency downloads excluded",
+    "sourceCommit": "1fce387"
+  },
+  {
+    "name": "rust-build",
+    "command": [
+      "cargo",
+      "build",
+      "--manifest-path",
+      "src-tauri/Cargo.toml"
+    ],
+    "seconds": 40.029,
+    "exitCode": 0
+  },
+  {
+    "name": "check",
+    "command": [
+      "npm",
+      "run",
+      "check"
+    ],
+    "seconds": 3.961,
+    "exitCode": 0
+  },
+  {
+    "name": "rust-incremental",
+    "command": [
+      "cargo",
+      "build",
+      "--manifest-path",
+      "src-tauri/Cargo.toml"
+    ],
+    "seconds": 5.262,
+    "exitCode": 0
+  },
+  {
+    "name": "frontend-incremental",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "seconds": 14.006,
+    "exitCode": 0
+  },
+  {
+    "name": "rust-test",
+    "seconds": 6.43,
+    "exitCode": 0
+  },
+  {
+    "name": "rust-fmt",
+    "seconds": 0.142,
+    "exitCode": 0
+  }
+]
