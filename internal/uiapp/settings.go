@@ -37,6 +37,7 @@ func (w *SettingsWorkspace) Load(post func(func()), applied func(settings.Snapsh
 	w.post = post
 	w.applied = applied
 	w.status = "loading"
+	w.err = ""
 	go func() {
 		snap, err := w.service.Snapshot()
 		post(func() {
@@ -48,6 +49,7 @@ func (w *SettingsWorkspace) Load(post func(func()), applied func(settings.Snapsh
 			w.snapshot = snap
 			w.draft = snap
 			w.status = "ready"
+			w.err = ""
 			applied(snap)
 		})
 	}()

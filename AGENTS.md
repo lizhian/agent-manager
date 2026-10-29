@@ -25,7 +25,7 @@
 
 - Skills 来源为 `owner/repo`，安全名 `owner_repo`。镜像位于 `~/.agent-manager/skills/`，唯一全局激活目录 `~/.agents/skills/`，链接名 `<source_safe>__<skill_name>`。
 - 来源更新保留仍存在条目的启用状态，清理上游删除条目及其受管链接；手工文件受保护。旧 JSON 与项目链接迁移只在 Skills 边界处理，成功后再清理旧数据。
-- Markdown 文档访问限制在当前 Skill 目录，拒绝路径/软链越界；原生预览不执行任意 HTML。
+- Markdown 文档访问限制在当前来源镜像根目录，允许来源内跨 Skill 相对引用，拒绝路径/软链越界；原生预览不执行任意 HTML。
 - AGENTS.md 片段在 `agents_md_fragments`；新片段默认禁用。增删改、开关、完整排序成功后立即生成 `~/.agents/AGENTS.md`，启用正文按序用一个空行分隔，保留既有受管标记。
 - 首次接管未受管文件备份为 `AGENTS.md.agent-manager-backup`；全部禁用后恢复备份。已有备份不可覆盖。搜索和筛选只影响展示，部分列表禁止拖拽；排序提交完整、唯一、已知的标识集合。
 - MCP 配置管理与 stdio/HTTP/SSE 调试独立于 GAAL/Agent 分发。旧兼容字段保留，不重新解释为进程状态。每次操作连接并关闭，默认30秒超时，回收本次拥有的子进程。

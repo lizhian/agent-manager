@@ -7,6 +7,7 @@ import (
 	"github.com/lizhian/agent-manager/internal/mcp"
 	"github.com/lizhian/agent-manager/internal/storage"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +21,14 @@ import (
 func TestMCPHelperProcess(t *testing.T) {
 	if os.Getenv("MCP_TEST_HELPER") != "1" {
 		return
+	}
+	switch os.Getenv("MCP_FAILURE_MODE") {
+	case "exit":
+		os.Exit(7)
+	case "malformed":
+		fmt.Fprintln(os.Stdout, "secret-payload: invalid JSON")
+		io.Copy(io.Discard, os.Stdin)
+		os.Exit(0)
 	}
 	if pidfile := os.Getenv("MCP_PID_FILE"); pidfile != "" {
 		child := exec.Command("/bin/sleep", "30")
@@ -170,5 +179,31 @@ func TestDebugReleasesOwnedWrapperChildren(t *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
+	}
+}
+
+func TestSafeDebugFailureCategoriesExcludeServerPayloads(t *testing.T) {
+	for _, mode := range []string{"exit", "malformed"} {
+		t.Run(mode, func(t *testing.T) {
+			store, err := storage.Open(storage.PathsFromDataDir(t.TempDir()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			service := mcp.New(store)
+			exe, _ := os.Executable()
+			snap, err := service.Create(mcp.Input{Name: "safe-errors", Transport: "stdio", Command: exe, Args: []string{"-test.run=^TestMCPHelperProcess$"}, Env: map[string]string{"MCP_TEST_HELPER": "1", "MCP_FAILURE_MODE": mode}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = mcp.NewDebugger(service, mcp.DebugOptions{Timeout: time.Second}).ListTools(context.Background(), snap.Servers[0].ID)
+			want := "退出码 7"
+			if mode == "malformed" {
+				want = "JSON"
+			}
+			if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "secret-payload") {
+				t.Fatal("missing safe category or leaking payload", err)
+			}
+		})
 	}
 }

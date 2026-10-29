@@ -188,7 +188,7 @@ func (w *SkillsWorkspace) View(c *ui.Context) {
 			}
 		})
 		if w.progress != "" {
-			ui.Text(c, w.progress).FontSize(11)
+			ui.Text(c, w.progress).FontSize(max(float32(10), c.Theme().FontSize-4))
 		}
 		if w.err != "" {
 			ui.Text(c, w.err).TextColor(c.Theme().Danger)
@@ -287,9 +287,9 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 			if ui.Switch(c, &enabled).Label("详情全局启用").Disabled(w.writing != "").Changed() {
 				w.toggleSkill(d.SourceSafe, d.Name, enabled)
 			}
-			ui.Text(c, "全局启用").FontSize(13)
+			ui.Text(c, "全局启用").FontSize(c.Theme().FontSize)
 			if w.writing != "" {
-				ui.Text(c, "操作进行中…").FontSize(11)
+				ui.Text(c, "操作进行中…").FontSize(max(float32(10), c.Theme().FontSize-4))
 			}
 		})
 		ui.Row(c).Gap(4).Children(func() {

@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lizhian/agent-manager/internal/processenv"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -136,6 +138,30 @@ func debugError(action, name string, ctx context.Context, err error) error {
 	if errors.As(err, &pathError) {
 		return fmt.Errorf("MCP %s %s失败：找不到可执行命令，请检查安装与 PATH", name, action)
 	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return fmt.Errorf("MCP %s %s失败：子进程退出码 %d", name, action, exit.ExitCode())
+	}
+	var syntax *json.SyntaxError
+	var valueType *json.UnmarshalTypeError
+	if errors.As(err, &syntax) || errors.As(err, &valueType) {
+		return fmt.Errorf("MCP %s %s失败：JSON 协议响应格式无效", name, action)
+	}
+	var dns *net.DNSError
+	if errors.As(err, &dns) {
+		return fmt.Errorf("MCP %s %s失败：DNS 解析失败，请检查服务地址", name, action)
+	}
+	var network net.Error
+	if errors.As(err, &network) {
+		return fmt.Errorf("MCP %s %s失败：网络连接失败，请检查地址、网络和服务状态", name, action)
+	}
+	var protocol *jsonrpc.Error
+	if errors.As(err, &protocol) {
+		return fmt.Errorf("MCP %s %s失败：JSON-RPC 协议错误码 %d", name, action, protocol.Code)
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return fmt.Errorf("MCP %s %s失败：协议连接提前关闭", name, action)
+	}
 	// Remote errors can contain credentials or user arguments; retain the failing stage, not their payload.
 	return fmt.Errorf("MCP %s %s失败：无法完成协议交互，请检查命令、连接参数和服务状态", name, action)
 }
@@ -170,6 +196,10 @@ func (d *Debugger) connect(ctx context.Context, server Server) (*sdk.ClientSessi
 	}
 	session, err := newProtocolClient().Connect(ctx, &sdk.CommandTransport{Command: command, TerminateDuration: 100 * time.Millisecond}, &sdk.ClientSessionOptions{ProtocolVersion: "2025-06-18"})
 	if err != nil {
+		// The SDK closes and waits its command on failed initialization; preserve only the exit status.
+		if command.ProcessState != nil && command.ProcessState.ExitCode() > 0 {
+			err = errors.Join(err, &exec.ExitError{ProcessState: command.ProcessState})
+		}
 		release()
 		return nil, nil, err
 	}

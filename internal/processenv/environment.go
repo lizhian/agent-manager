@@ -34,7 +34,14 @@ func ResolvePath(ctx context.Context, inherited string) string {
 	if !filepath.IsAbs(shell) {
 		shell = "/bin/zsh"
 	}
-	output, err := exec.CommandContext(ctx, shell, "-ilc", `printf '__AGENT_MANAGER_PATH_START__%s__AGENT_MANAGER_PATH_END__' "$PATH"`).Output()
+	command := exec.CommandContext(ctx, shell, "-ilc", `printf '__AGENT_MANAGER_PATH_START__%s__AGENT_MANAGER_PATH_END__' "$PATH"`)
+	release, err := OwnProcessGroup(command)
+	if err != nil {
+		return inherited
+	}
+	defer release()
+	command.WaitDelay = 200 * time.Millisecond
+	output, err := command.Output()
 	if err != nil {
 		return inherited
 	}
