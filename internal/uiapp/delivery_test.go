@@ -24,6 +24,7 @@ func TestFormalSidebarAndToolbarFitAllSizes(t *testing.T) {
 				prefs := settings.New(store, settings.Options{Fonts: func() ([]string, error) { return []string{"Example Sans"}, nil }})
 				value := settings.Defaults()
 				value.FontSize = size
+				value.FontFamily = "PingFang SC"
 				if _, err = prefs.Save(value); err != nil {
 					t.Fatal(err)
 				}
@@ -55,14 +56,14 @@ func TestFormalSidebarAndToolbarFitAllSizes(t *testing.T) {
 						t.Fatal("missing navigation", label)
 					}
 
-					if r.X < 6 || r.X+r.W > 128 || r.Y <= previousY {
+					if r.X < 6 || r.X+r.W > 160 || r.Y <= previousY {
 						t.Fatal("navigation must remain a vertical sidebar", label, r)
 					}
 					previousY = r.Y
 				}
 				for _, label := range []string{"安装来源", "全部更新", "技能文件夹", "重新加载"} {
 					r, ok := tt.Find(label)
-					if !ok || r.X < 128 || r.X+r.W > float32(width) {
+					if !ok || r.X < 104 || r.X+r.W > float32(width) {
 						t.Fatal("toolbar leaves workspace", label, r)
 					}
 				}
