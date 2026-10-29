@@ -19,6 +19,7 @@ type app struct {
 	combined       bool
 	bottom         bool
 	resetOpen      bool
+	resetTrigger   ui.Handle
 	listWidth      float32
 	previewPercent float32
 	md             markdown.Options
@@ -37,15 +38,19 @@ func (a *app) view(c *ui.Context) {
 		ui.Row(c).Gap(8).Children(func() {
 			ui.Text(c, "AGENTS.md").FontSize(18).Bold()
 			ui.Text(c, "原生样本 · 数据仅保存在内存").TextColor(theme.TextMuted).Grow(1)
-			if ui.Button(c, "重置样本").Height(28).Clicked() {
+			if ui.Button(c, "重置样本").Height(28).Bind(&a.resetTrigger).Clicked() {
 				a.resetOpen = true
 			}
 		})
 		ui.Split(c, &a.listWidth, func() { a.list(c) }, func() { a.workspace(c) }).Grow(1).MinHeight(0)
 	})
+	wasOpen := a.resetOpen
 	if ui.AlertDialog(c, &a.resetOpen, "重置临时片段？", "将丢弃本次编辑和顺序；不会修改磁盘上的数据。", "取消", "重置") == 1 {
 		a.sample = NewSample()
 		a.query = ""
+	}
+	if wasOpen && !a.resetOpen {
+		a.resetTrigger.Focus(c)
 	}
 }
 func (a *app) list(c *ui.Context) {

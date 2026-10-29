@@ -20,6 +20,9 @@ func TestViewCanEditAndCancelReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Key(0, ui.KeyEscape)
+	if !tt.Focused("重置样本") {
+		t.Fatal("dialog did not restore focus to reset trigger")
+	}
 	if a.resetOpen || a.sample.Fragments[0].Name != "中文修改" {
 		t.Fatal("Escape must preserve edits")
 	}
