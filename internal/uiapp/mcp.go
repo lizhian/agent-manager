@@ -112,7 +112,7 @@ func (w *MCPWorkspace) View(c *ui.Context) {
 	w.listWidth = max(float32(240), min(w.listWidth, maxList))
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
-			ui.Text(c, "MCP 管理").FontSize(18).Bold()
+			ui.Text(c, "MCP 管理").FontSize(c.Theme().FontSize + 3).Bold()
 			ui.Text(c, fmt.Sprintf("%d 个服务", len(w.snapshot.Servers))).TextColor(t.TextMuted).Grow(1)
 			if ui.Button(c, "新增 MCP").Height(28).Bind(&w.newTrigger).Disabled(w.busy || w.status != "ready").Clicked() {
 				w.selected = 0
@@ -212,7 +212,7 @@ func (w *MCPWorkspace) list(c *ui.Context) {
 						if button.Clicked() {
 							w.selectServer(server)
 						}
-						ui.Text(c, server.Transport).FontSize(11).TextColor(c.Theme().TextMuted)
+						ui.Text(c, server.Transport).FontSize(max(float32(10), c.Theme().FontSize-4)).TextColor(c.Theme().TextMuted)
 					})
 				}
 				if visible == 0 {

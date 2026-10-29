@@ -3,6 +3,7 @@ package uiapp_test
 import (
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"github.com/lizhian/agent-manager/internal/agentsmd"
 	"github.com/lizhian/agent-manager/internal/settings"
 	"github.com/lizhian/agent-manager/internal/storage"
 	"github.com/lizhian/agent-manager/internal/uiapp"
@@ -70,5 +71,51 @@ func TestSettingsFontFailureDoesNotBlockPreferencesAndFailedSaveRetriesDraft(t *
 	flush()
 	if applied.Preview.Position != "right" {
 		t.Fatal(applied)
+	}
+}
+
+func TestWorkspacePreviewGesturePersistsSharedPreference(t *testing.T) {
+	store, err := storage.Open(storage.PathsFromDataDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	service := settings.New(store, settings.Options{Fonts: func() ([]string, error) { return []string{"Example Sans"}, nil }})
+	app := uiapp.NewApp(agentsmd.New(store, agentsmd.Options{}))
+	app.Settings = uiapp.NewSettingsWorkspace(service)
+	updates := make(chan func(), 8)
+	app.Start(func(fn func()) { updates <- fn })
+	tt := ui.NewTester(app.View, 960, 640)
+	flush := func() {
+		t.Helper()
+		select {
+		case fn := <-updates:
+			fn()
+			tt.Frame()
+		case <-time.After(3 * time.Second):
+			t.Fatal("async timeout")
+		}
+	}
+	flush()
+	flush()
+	flush()
+	if err = tt.Click("底部预览"); err != nil {
+		t.Fatal(err)
+	}
+	flush()
+	saved, err := service.Snapshot()
+	if err != nil || saved.Preview.Position != "right" {
+		t.Fatal(saved, err)
+	}
+	if err = tt.Click("设置"); err != nil {
+		t.Fatal(err)
+	}
+	if err = tt.Click("Example Sans"); err != nil {
+		t.Fatal(err)
+	}
+	flush()
+	saved, err = service.Snapshot()
+	if err != nil || saved.FontFamily != "Example Sans" {
+		t.Fatal(saved, err)
 	}
 }

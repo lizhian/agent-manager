@@ -55,3 +55,29 @@ func TestLegacySettingsSaveReloadAndRollback(t *testing.T) {
 		t.Fatal("unknown data changed")
 	}
 }
+
+func TestAllFontSizesAndFontEnumerationContract(t *testing.T) {
+	store, err := storage.Open(storage.PathsFromDataDir(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	s := settings.New(store, settings.Options{Fonts: func() ([]string, error) { return []string{"Zulu", "alpha", "ALPHA", "中文字体"}, nil }})
+	for i, size := range []settings.FontSize{"extra-small", "small", "standard", "large", "extra-large"} {
+		value := settings.Defaults()
+		value.FontSize = size
+		saved, err := s.Save(value)
+		if err != nil || saved.FontSize.Pixels() != float32(13+i) {
+			t.Fatal(saved, err)
+		}
+	}
+	fonts, err := s.Fonts()
+	if err != nil || len(fonts) != 3 || fonts[0] != "alpha" && fonts[0] != "ALPHA" {
+		t.Fatal(fonts, err)
+	}
+	bad := settings.Defaults()
+	bad.Preview.Ratio = 0.9
+	if _, err = s.Save(bad); err == nil {
+		t.Fatal("accepted invalid ratio")
+	}
+}

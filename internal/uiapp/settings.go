@@ -18,6 +18,7 @@ func SystemFontNames() ([]string, error) {
 }
 
 type SettingsWorkspace struct {
+	fontsLoading         bool
 	service              *settings.Service
 	post                 func(func())
 	applied              func(settings.Snapshot)
@@ -54,9 +55,11 @@ func (w *SettingsWorkspace) Load(post func(func()), applied func(settings.Snapsh
 }
 func (w *SettingsWorkspace) loadFonts() {
 	w.fontsErr = ""
+	w.fontsLoading = true
 	go func() {
 		fonts, err := w.service.Fonts()
 		w.post(func() {
+			w.fontsLoading = false
 			if err != nil {
 				w.fontsErr = err.Error()
 				return
@@ -176,6 +179,9 @@ func (w *SettingsWorkspace) View(c *ui.Context) {
 					}
 				})
 				ui.SearchField(c, &w.query).Label("搜索系统字体").Placeholder("搜索系统字体").Height(28)
+				if w.fontsLoading {
+					ui.Text(c, "正在读取系统字体…").TextColor(t.TextMuted)
+				}
 				if w.fontsErr != "" {
 					ui.Text(c, w.fontsErr).TextColor(t.Danger)
 					if ui.Button(c, "重试字体枚举").Height(28).Clicked() {
