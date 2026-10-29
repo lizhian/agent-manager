@@ -1,8 +1,10 @@
 package main
 
 import (
-	"github.com/egoist/mygo/ui"
 	"testing"
+	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func TestViewCanEditAndCancelReset(t *testing.T) {
@@ -109,5 +111,85 @@ func TestSplitterLimitsKeepMinimumWindowUsable(t *testing.T) {
 		if body.H < 100 || preview.Y+140 > 632 {
 			t.Fatalf("unusable vertical panes: editor%+v preview%+v", body, preview)
 		}
+	}
+}
+
+func TestDraggingAtListEdgeScrollsToOffscreenFragments(t *testing.T) {
+	a := newApp()
+	tt := ui.NewTester(a.view, 960, 640)
+	from, ok := tt.Find("拖动排序 规则片段 01")
+	if !ok {
+		t.Fatal("missing handle")
+	}
+	tt.Press(from.X+from.W/2, from.Y+from.H/2)
+	tt.Move(100, 620)
+	tt.Advance(2 * time.Second)
+	// Row30 starts outside the window; dragging near the bottom must reveal it.
+	target, ok := tt.Find("规则片段 30")
+	if !ok || target.Y < 60 || target.Y+target.H > 632 {
+		t.Fatalf("edge drag did not reveal row30: %+v %v", target, ok)
+	}
+	tt.Move(target.X+target.W/2, target.Y+target.H/2)
+	tt.Release(target.X+target.W/2, target.Y+target.H/2)
+	if a.sample.Fragments[28].ID != 1 || a.sample.Fragments[29].ID != 30 {
+		t.Fatal("drop after edge scroll did not use current target")
+	}
+}
+
+func TestEditorCompositionSelectionClipboardAndUndo(t *testing.T) {
+	a := newApp()
+	tt := ui.NewTester(a.view, 960, 640)
+	if err := tt.Click("Markdown 正文"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Compose("zhongwen", 8)
+	tt.Type("中文组合输入")
+	if a.sample.Fragments[0].Body != "中文组合输入" {
+		t.Fatal(a.sample.Fragments[0].Body)
+	}
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Key(ui.Cmd, ui.KeyC)
+	if tt.Clipboard() != "中文组合输入" {
+		t.Fatal("selection copy failed")
+	}
+	tt.Key(0, ui.KeyEnd)
+	tt.Key(ui.Cmd, ui.KeyV)
+	if a.sample.Fragments[0].Body != "中文组合输入中文组合输入" {
+		t.Fatal("paste failed")
+	}
+	tt.Key(ui.Cmd, ui.KeyZ)
+	if a.sample.Fragments[0].Body != "中文组合输入" {
+		t.Fatal("undo failed")
+	}
+}
+
+func TestKeyboardCanReachAndToggleFragmentAfterDialog(t *testing.T) {
+	a := newApp()
+	tt := ui.NewTester(a.view, 960, 640)
+	if err := tt.Click("重置样本"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Key(0, ui.KeyEnter)
+	if !a.resetOpen {
+		t.Fatal("Enter did not reopen focused trigger")
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Key(0, ui.KeyTab)
+	if !tt.Focused("搜索片段") {
+		t.Fatal("Tab did not reach search")
+	}
+	tt.Key(0, ui.KeyTab)
+	if !tt.Focused("拖动排序 规则片段 01") {
+		t.Fatal("Tab did not reach handle")
+	}
+	tt.Key(0, ui.KeyTab)
+	if !tt.Focused("启用 规则片段 01") {
+		t.Fatal("Tab did not reach switch")
+	}
+	tt.Key(0, ui.KeySpace)
+	if a.sample.Fragments[0].Enabled {
+		t.Fatal("Space did not toggle fragment")
 	}
 }
