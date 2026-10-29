@@ -257,7 +257,7 @@ func (w *SkillsWorkspace) preview(c *ui.Context) {
 		main := func() {
 			w.anchorBlocks(&w.mainMD, d.Name+"/SKILL.md")
 			w.mainMD.OnLink = func(href string) { w.followLink(href, d.Name+"/SKILL.md") }
-			ui.Scroll(c).Grow(1).MinHeight(0).Children(func() { markdown.View(c, d.Content, &w.mainMD) })
+			ui.Scroll(c).Grow(1).MinHeight(0).Children(func() { markdown.View(c, d.Markdown, &w.mainMD) })
 		}
 		if w.documentLoading {
 			ui.Text(c, "正在读取关联文档…")

@@ -34,8 +34,8 @@ type Snapshot struct {
 	EnabledContentChars              int
 }
 type Detail struct {
-	Source, SourceSafe, Name, Description, MetadataName, MetadataDescription, Path, Content, UpdatedAt string
-	GlobalEnabled                                                                                      bool
+	Source, SourceSafe, Name, Description, MetadataName, MetadataDescription, Path, Content, Markdown, UpdatedAt string
+	GlobalEnabled                                                                                                bool
 }
 type Document struct{ SourceSafe, SkillName, Title, RelativePath, Content string }
 type Options struct{ Open func(string) error }
@@ -179,7 +179,7 @@ func (s *Service) Detail(sourceSafe, name string) (Detail, error) {
 	if meta.Name == "" {
 		meta.Name = name
 	}
-	return Detail{Source: source.Source, SourceSafe: sourceSafe, Name: name, Description: skill.Description, MetadataName: meta.Name, MetadataDescription: skill.Description, Path: filepath.Dir(p), Content: string(data), UpdatedAt: skill.UpdatedAt, GlobalEnabled: skill.GlobalEnabled}, nil
+	return Detail{Source: source.Source, SourceSafe: sourceSafe, Name: name, Description: skill.Description, MetadataName: meta.Name, MetadataDescription: skill.Description, Path: filepath.Dir(p), Content: string(data), Markdown: markdownBody(string(data)), UpdatedAt: skill.UpdatedAt, GlobalEnabled: skill.GlobalEnabled}, nil
 }
 func (s *Service) Document(sourceSafe, name, relative string) (Document, error) {
 	s.mu.Lock()
@@ -283,4 +283,19 @@ func (s *Service) OpenURL(raw string) error {
 		return fmt.Errorf("外部链接无效：%s", raw)
 	}
 	return s.open(raw)
+}
+
+// Keep the original source for character counts and system-open; frontmatter is already shown as metadata.
+func markdownBody(body string) string {
+	normalized := strings.TrimPrefix(strings.ReplaceAll(body, "\r\n", "\n"), "\ufeff")
+	lines := strings.Split(normalized, "\n")
+	if len(lines) < 2 || strings.TrimSpace(lines[0]) != "---" {
+		return body
+	}
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			return strings.Join(lines[i+1:], "\n")
+		}
+	}
+	return body
 }
