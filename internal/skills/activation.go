@@ -10,9 +10,11 @@ import (
 // SetGlobalEnabled changes only the selected catalog-derived link. The SQL
 // transaction stays open until that filesystem operation succeeds.
 func (s *Service) SetGlobalEnabled(sourceSafe, name string, enabled bool) (snapshot Snapshot, result error) {
-	if !s.mu.TryLock() {
+	if !s.writeMu.TryLock() {
 		return Snapshot{}, fmt.Errorf("更新 Skill %s/%s 全局状态失败：另一个写入任务正在运行", sourceSafe, name)
 	}
+	defer s.writeMu.Unlock()
+	s.mu.Lock()
 	defer s.mu.Unlock()
 	fail := func(err error) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("更新 Skill %s/%s 全局状态失败：%w", sourceSafe, name, err)
