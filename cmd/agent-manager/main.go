@@ -7,6 +7,7 @@ import (
 	"github.com/lizhian/agent-manager/internal/agentsmd"
 	"github.com/lizhian/agent-manager/internal/mcp"
 	"github.com/lizhian/agent-manager/internal/storage"
+ "github.com/lizhian/agent-manager/internal/settings"
 	"github.com/lizhian/agent-manager/internal/uiapp"
 	"log"
 	"os"
@@ -36,6 +37,7 @@ func main() {
 	defer store.Close()
 	app := uiapp.NewApp(agentsmd.New(store, agentsmd.Options{}))
 	app.MCP = uiapp.NewMCPWorkspace(mcp.New(store))
+ app.Settings=uiapp.NewSettingsWorkspace(settings.New(store,settings.Options{Fonts:uiapp.SystemFontNames}))
 	width, height := 1180, 760
 	if *minimum {
 		width, height = 960, 640
