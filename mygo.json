@@ -1,0 +1,9 @@
+{
+  "name": "Agent Manager",
+  "slug": "agent-manager",
+  "identifier": "com.lizhian.agentmanager",
+  "main": "./cmd/agent-manager",
+  "macos": {
+    "icon": "assets/macos/icon.icns"
+  }
+}

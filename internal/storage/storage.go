@@ -22,6 +22,21 @@ func PathsFromHome(home string) Paths {
 }
 func PathsFromDataDir(dir string) Paths { return PathsFromHome(dir) }
 
+// PathsForRun keeps MyGo's development reloads on a persistent, isolated store.
+// The CLI launches the application with the project directory as its working directory.
+func PathsForRun(home, workingDir, dataDir string, development bool) Paths {
+	if dataDir == "" {
+		if !development {
+			return PathsFromHome(home)
+		}
+		dataDir = filepath.Join(".mygo", "data")
+	}
+	if !filepath.IsAbs(dataDir) {
+		dataDir = filepath.Join(workingDir, dataDir)
+	}
+	return PathsFromDataDir(dataDir)
+}
+
 type Store struct {
 	DB    *sql.DB
 	Paths Paths

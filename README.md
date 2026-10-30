@@ -9,9 +9,19 @@ Go + MyGo 原生桌面工具，管理 Skills、独立 MCP 服务配置/工具调
 需要 Go 1.27.3（见 `.go-version`）和 Xcode Command Line Tools；SQLite 驱动需要 CGO。MyGo 固定为 v0.7.3。
 
 ```sh
-go run ./cmd/agent-manager
-# 隔离数据库、镜像与受管文件，不接触真实用户数据：
+CGO_ENABLED=1 go tool mygo dev
+```
+
+CLI 与框架一起锁定为 v0.7.3。该入口启动独立的 `Agent Manager Dev`，修改 Go 文件后自动重新构建、重启；编译失败时保留上一次运行的版本。退出窗口或按 Ctrl+C 结束开发运行。
+
+开发模式默认将数据库、镜像和受管文件放到项目的 `.mygo/data/.agent-manager` 与 `.mygo/data/.agents`，重启后保留测试数据；`.mygo` 不提交。正式打包仍使用下方脚本，以 Info.plist 为正式版本来源，mygo.json 仅配置开发入口。
+
+需要手动指定隔离目录或最小窗口时：
+
+```sh
 go run ./cmd/agent-manager --data-dir /tmp/agent-manager-validation --minimum
+# 使用真实用户配置：
+go run ./cmd/agent-manager
 ```
 
 默认窗口1180×760，最小960×640。Skills 安装/更新仍通过外部 `npx skills`，使用这些功能时需要 Node/npm/npx；这不是应用启动或构建依赖。

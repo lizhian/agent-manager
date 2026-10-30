@@ -23,14 +23,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	paths := storage.PathsFromHome(home)
-	if *dataDir != "" {
-		absolute, err := filepath.Abs(*dataDir)
-		if err != nil {
-			log.Fatal(err)
-		}
-		paths = storage.PathsFromDataDir(absolute)
+	workingDir, err := filepath.Abs(".")
+	if err != nil {
+		log.Fatal(err)
 	}
+	// MyGo consumes MYGO_DEV during package initialization; MYGO_ENV remains available.
+	paths := storage.PathsForRun(home, workingDir, *dataDir, os.Getenv("MYGO_ENV") == "development")
 	store, err := storage.Open(paths)
 	if err != nil {
 		log.Fatal(err)
