@@ -182,3 +182,17 @@ cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 - 使用 `feat:`、`fix:`、`docs:`、`test:`、`refactor:`、`chore:` 等 Conventional Commits 前缀。
 - 一次提交只包含一个逻辑变更；提交前清理调试输出并运行相关检查。
 - PR 描述包含用户可见变化、关键技术决策、测试结果和已知限制；界面变化附桌面与窄窗口截图。
+
+## Agent skills
+
+### Issue tracker
+
+创建、读取或更新 spec 与任务时，使用 GitHub Issues `lizhian/agent-manager`；先读取 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+分类 issue 或设置工作状态标签时，先读取 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+本项目使用单一上下文；探索、设计、实现和评审时，按 `docs/agents/domain.md` 读取术语与相关 ADR。
